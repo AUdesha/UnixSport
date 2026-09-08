@@ -1,0 +1,110 @@
+.gym-page{
+    min-height:100vh;
+    background:#f4f7fc;
+}
+
+.gym-header{
+    background:#0b1f4d;
+    color:white;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    padding:20px 50px;
+}
+
+.logo{
+    font-size:30px;
+    font-weight:bold;
+    color:#4dabff;
+}
+
+.nav-menu{
+    list-style:none;
+    display:flex;
+    gap:30px;
+}
+
+.nav-menu a{
+    color:white;
+    text-decoration:none;
+}
+
+.gym-container{
+    width:90%;
+    margin:40px auto;
+}
+
+.gym-container h2{
+    text-align:center;
+    color:#0b1f4d;
+    margin-bottom:30px;
+}
+
+.status-cards{
+    display:flex;
+    gap:20px;
+    justify-content:center;
+    margin-bottom:30px;
+}
+
+.card{
+    width:200px;
+    padding:20px;
+    text-align:center;
+    border-radius:10px;
+    color:white;
+    font-weight:bold;
+}
+
+.approved{
+    background:#22c55e;
+}
+
+.pending{
+    background:#f59e0b;
+}
+
+.rejected{
+    background:#ef4444;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:white;
+}
+
+th{
+    background:#0b1f4d;
+    color:white;
+}
+
+th,
+td{
+    padding:15px;
+    border:1px solid #ddd;
+    text-align:center;
+}
+
+.button-group{
+    margin-top:30px;
+
+    display:flex;
+    justify-content:center;
+    gap:20px;
+}
+
+.button-group button{
+    background:#2563eb;
+    color:white;
+
+    border:none;
+
+    padding:12px 25px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
