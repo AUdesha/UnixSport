@@ -1,0 +1,607 @@
+* {
+  box-sizing: border-box;
+}
+
+.coach-app {
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  transition: 0.3s ease;
+}
+
+/* =====================================================
+   DARK MODE
+===================================================== */
+
+.dark-mode {
+  background: #080e18;
+  color: #f1f5f9;
+
+  --navbar: #101827;
+  --sidebar: #0c1423;
+  --main: #080e18;
+  --card: #10192b;
+  --border: #26344b;
+  --text: #f1f5f9;
+  --secondary: #91a0b6;
+  --popup: #111c2d;
+}
+
+/* =====================================================
+   LIGHT MODE
+===================================================== */
+
+.light-mode {
+  background: #f1f5f9;
+  color: #172033;
+
+  --navbar: #ffffff;
+  --sidebar: #ffffff;
+  --main: #f1f5f9;
+  --card: #ffffff;
+  --border: #d6dee9;
+  --text: #172033;
+  --secondary: #64748b;
+  --popup: #ffffff;
+}
+
+/* =====================================================
+   NAVBAR
+===================================================== */
+
+.coach-navbar {
+  height: 70px;
+
+  background: var(--navbar);
+  border-bottom: 1px solid var(--border);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 22px;
+
+  transition: 0.3s ease;
+}
+
+.coach-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-logo {
+  font-size: 30px;
+}
+
+.coach-brand h2 {
+  margin: 0;
+
+  font-size: 20px;
+  color: #12bce8;
+}
+
+.coach-brand span {
+  display: block;
+
+  margin-top: 2px;
+
+  color: #64748b;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* =====================================================
+   NAVBAR BUTTONS
+===================================================== */
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  position: relative;
+}
+
+.clock {
+  height: 42px;
+
+  padding: 0 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  border: 1px solid #075477;
+  border-radius: 10px;
+
+  background: #0b1725;
+
+  color: #e5edf7;
+
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.nav-icon {
+  width: 42px;
+  height: 42px;
+
+  border: 1px solid #d8e0ea;
+  border-radius: 10px;
+
+  background: #f8fafc;
+  color: #0d1b2a;
+
+  font-size: 18px;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.nav-icon:hover {
+  transform: translateY(-2px);
+}
+
+.logout-btn {
+  height: 42px;
+
+  padding: 0 20px;
+
+  border: 2px solid #2563eb;
+  border-radius: 10px;
+
+  background: transparent;
+
+  color: var(--text);
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+/* =====================================================
+   NOTIFICATION
+===================================================== */
+
+.notification-wrapper {
+  position: relative;
+}
+
+.notification-popup {
+  position: absolute;
+
+  top: 52px;
+  right: 0;
+
+  width: 350px;
+
+  background: var(--popup);
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+
+  padding: 18px;
+
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
+
+  z-index: 1000;
+}
+
+.notification-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 12px;
+}
+
+.notification-title h3 {
+  margin: 0;
+
+  color: var(--text);
+}
+
+.notification-title span {
+  min-width: 25px;
+  height: 25px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #2563eb;
+  color: white;
+
+  font-size: 12px;
+}
+
+.notification-item {
+  display: flex;
+  gap: 12px;
+
+  padding: 13px 5px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-icon {
+  font-size: 22px;
+}
+
+.notification-item strong {
+  color: var(--text);
+
+  font-size: 14px;
+}
+
+.notification-item p {
+  margin: 4px 0;
+
+  color: var(--secondary);
+
+  font-size: 12px;
+}
+
+.notification-item small {
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.view-all-notifications {
+  width: 100%;
+
+  margin-top: 14px;
+  padding: 10px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #087fba;
+  color: white;
+
+  cursor: pointer;
+}
+
+/* =====================================================
+   BODY
+===================================================== */
+
+.coach-body {
+  display: flex;
+
+  min-height: calc(100vh - 70px);
+}
+
+/* =====================================================
+   SIDEBAR
+===================================================== */
+
+.coach-sidebar {
+  width: 276px;
+
+  flex-shrink: 0;
+
+  background: var(--sidebar);
+
+  border-right: 1px solid var(--border);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  padding: 15px 12px 26px;
+}
+
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sidebar-item {
+  width: 100%;
+  min-height: 49px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 0 18px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: transparent;
+
+  color: var(--secondary);
+
+  font-size: 15px;
+  font-weight: 600;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.sidebar-item span:first-child {
+  width: 22px;
+
+  text-align: center;
+
+  font-size: 20px;
+}
+
+.sidebar-item:hover {
+  background: #102238;
+  color: var(--text);
+}
+
+.sidebar-item.active {
+  background: linear-gradient(
+    90deg,
+    #087fba,
+    #098bc5
+  );
+
+  color: white;
+
+  box-shadow:
+    0 5px 18px rgba(0, 136, 204, 0.25);
+}
+
+.sidebar-logout {
+  border: none;
+
+  background: transparent;
+
+  color: #ff3333;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  text-align: left;
+
+  padding: 10px 16px;
+
+  cursor: pointer;
+}
+
+/* =====================================================
+   MAIN
+===================================================== */
+
+.coach-main {
+  flex: 1;
+
+  min-width: 0;
+
+  padding: 24px;
+
+  background-color: var(--main);
+
+  background-image:
+    linear-gradient(
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px
+    );
+
+  background-size: 40px 40px;
+}
+
+.coach-main h1 {
+  margin: 0 0 27px;
+
+  font-size: 39px;
+  font-weight: 700;
+
+  letter-spacing: -1px;
+
+  color: var(--text);
+}
+
+/* =====================================================
+   STAT CARDS
+===================================================== */
+
+.stats-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 20px;
+}
+
+.stat-card {
+  min-width: 0;
+  min-height: 180px;
+
+  padding: 24px;
+
+  border: 1px solid var(--border);
+  border-radius: 15px;
+
+  background: var(--card);
+
+  display: flex;
+  align-items: flex-start;
+
+  gap: 16px;
+
+  box-shadow:
+    0 8px 25px rgba(0, 0, 0, 0.18);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+
+  flex-shrink: 0;
+
+  border-radius: 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.stat-content {
+  min-width: 0;
+}
+
+.stat-card h3 {
+  margin: 3px 0 18px;
+
+  font-size: 15px;
+
+  color: var(--text);
+
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.stat-card strong {
+  font-size: 26px;
+
+  color: var(--text);
+}
+
+.pending-icon {
+  background: #38231f;
+  color: #ff6814;
+}
+
+.approved-icon {
+  background: #09312e;
+  color: #16c56a;
+}
+
+.students-icon {
+  background: #112956;
+  color: #2868ed;
+}
+
+.sessions-icon {
+  background: #102858;
+  color: #2870ed;
+}
+
+/* =====================================================
+   RECENT ACTIVITY
+===================================================== */
+
+.activity-card {
+  margin-top: 60px;
+
+  min-height: 220px;
+
+  border: 1px solid var(--border);
+  border-radius: 15px;
+
+  background: var(--card);
+
+  padding: 25px;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+.activity-header h2 {
+  margin: 0;
+
+  font-size: 19px;
+
+  color: var(--text);
+}
+
+.empty-activity {
+  height: 130px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--secondary);
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 1100px) {
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+}
+
+@media (max-width: 750px) {
+
+  .coach-sidebar {
+    width: 220px;
+  }
+
+  .coach-main h1 {
+    font-size: 30px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 600px) {
+
+  .coach-sidebar {
+    display: none;
+  }
+
+  .coach-navbar {
+    padding: 0 12px;
+  }
+
+  .coach-brand h2 {
+    font-size: 17px;
+  }
+
+  .coach-brand span {
+    font-size: 9px;
+  }
+
+  .logout-btn {
+    padding: 0 10px;
+  }
+
+  .notification-popup {
+    right: -80px;
+    width: 310px;
+  }
+
+  .coach-main {
+    padding: 18px;
+  }
+
+}

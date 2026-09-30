@@ -3,16 +3,13 @@ import "../css/Home.css";
 import { useState, useEffect } from "react";
 
 function Home() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("theme") === "dark"
+  );
 
-useEffect(() => {
-  const savedTheme = localStorage.getItem("theme");
-
-  if (savedTheme === "dark") {
-    setDarkMode(true);
-    document.body.classList.add("dark-mode");
-  }
-}, []);
+  useEffect(() => {
+    document.body.classList.toggle("dark-mode", darkMode);
+  }, [darkMode]);
 
 const toggleTheme = () => {
   if (darkMode) {

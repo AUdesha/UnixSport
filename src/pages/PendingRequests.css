@@ -1,0 +1,200 @@
+.pending-page {
+  min-height: calc(100vh - 70px);
+  padding: 28px;
+  background: #080e18;
+  color: #f1f5f9;
+}
+
+.pending-page h1 {
+  margin: 0 0 28px;
+
+  font-size: 38px;
+  font-weight: 700;
+
+  color: #f1f5f9;
+}
+
+/* Search + Filter */
+
+.request-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.search-box {
+  flex: 1;
+
+  height: 49px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 16px;
+
+  border: 1px solid #34445b;
+  border-radius: 13px;
+
+  background: #080e18;
+}
+
+.search-box span {
+  margin-right: 12px;
+
+  font-size: 25px;
+
+  color: #64748b;
+}
+
+.search-box input {
+  width: 100%;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  color: #f1f5f9;
+
+  font-size: 16px;
+}
+
+.search-box input::placeholder {
+  color: #64748b;
+}
+
+.time-filter {
+  width: 165px;
+
+  height: 49px;
+
+  padding: 0 15px;
+
+  border: 1px solid #34445b;
+  border-radius: 13px;
+
+  background: #080e18;
+
+  color: #f1f5f9;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  outline: none;
+
+  cursor: pointer;
+}
+
+/* Table */
+
+.requests-table {
+  width: 100%;
+
+  min-height: 290px;
+
+  border: 1px solid #27364b;
+  border-radius: 14px;
+
+  overflow: hidden;
+
+  background: #0d1524;
+}
+
+.table-header {
+  min-height: 62px;
+
+  display: grid;
+
+  grid-template-columns:
+    1.1fr
+    0.9fr
+    1.2fr
+    1.2fr
+    1.2fr
+    1.1fr
+    0.8fr;
+
+  align-items: center;
+
+  padding: 0 18px;
+
+  background: #1a2739;
+
+  color: #e2e8f0;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  column-gap: 15px;
+}
+
+.empty-request {
+  min-height: 225px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  color: #64748b;
+}
+
+.empty-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 15px;
+
+  border-radius: 10px;
+
+  background: #1d2a3c;
+
+  font-size: 30px;
+}
+
+.empty-request h3 {
+  margin: 0;
+
+  color: #d7deea;
+
+  font-size: 17px;
+}
+
+/* Responsive */
+
+@media (max-width: 1000px) {
+
+  .requests-table {
+    overflow-x: auto;
+  }
+
+  .table-header {
+    min-width: 900px;
+  }
+
+}
+
+@media (max-width: 700px) {
+
+  .pending-page {
+    padding: 18px;
+  }
+
+  .pending-page h1 {
+    font-size: 30px;
+  }
+
+  .request-controls {
+    flex-direction: column;
+  }
+
+  .time-filter {
+    width: 100%;
+  }
+
+}
