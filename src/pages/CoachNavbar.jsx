@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import "./CoachDashboard.css";
 
-function CoachNavbar() {
+function CoachNavbar({ darkMode, onToggleTheme }) {
   const [time, setTime] = useState(new Date());
-  const [darkMode, setDarkMode] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
@@ -39,8 +38,9 @@ function CoachNavbar() {
 
         <button
           className="nav-icon theme-button"
-          onClick={() => setDarkMode(!darkMode)}
-          title="Change theme"
+          onClick={onToggleTheme}
+          title={`Switch to ${darkMode ? "light" : "dark"} mode`}
+          aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`}
         >
           {darkMode ? "☀️" : "🌙"}
         </button>

@@ -23,10 +23,10 @@ function CoachSidebar() {
           <span>Request History</span>
         </button>
 
-        <button className="sidebar-item">
+        <NavLink to="/schedule-calendar" className={sidebarLinkClass}>
           <span>▦</span>
           <span>Schedule Calendar</span>
-        </button>
+        </NavLink>
 
         <button className="sidebar-item">
           <span>⚑</span>

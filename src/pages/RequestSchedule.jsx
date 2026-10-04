@@ -2,11 +2,26 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/RequestSchedule.css";
 
+const STORAGE_KEY = "gym-schedule-requests";
+const SLOT_CAPACITY = 30;
+
+function getStoredRequests() {
+  const storedRequests = localStorage.getItem(STORAGE_KEY);
+  const requests = storedRequests === null ? [] : JSON.parse(storedRequests);
+
+  if (!Array.isArray(requests)) {
+    throw new Error(`Expected "${STORAGE_KEY}" to contain an array.`);
+  }
+
+  return requests;
+}
+
 function RequestSchedule() {
   const navigate = useNavigate();
 
   const [playSport, setPlaySport] = useState("Yes");
   const [injury, setInjury] = useState("No");
+  const [selectedSlots, setSelectedSlots] = useState({});
 
   const days = [
     "Monday",
@@ -30,25 +45,25 @@ function RequestSchedule() {
     "19-20",
   ];
 
-  // Example booked slots (later these will come from the database)
-  const bookedSlots = {
-    Monday: ["08-09", "17-18"],
-    Tuesday: ["10-11"],
-    Wednesday: ["14-15"],
-  };
-
-  const [selectedSlots, setSelectedSlots] = useState({});
+  const requests = getStoredRequests();
 
   const handleSlotClick = (day, slot) => {
-    if (bookedSlots[day]?.includes(slot)) return;
-
     const current = selectedSlots[day] || [];
 
     if (current.includes(slot)) {
-      setSelectedSlots({
-        ...selectedSlots,
-        [day]: current.filter((s) => s !== slot),
-      });
+      setSelectedSlots((previousSlots) => ({
+        ...previousSlots,
+        [day]: current.filter((selectedSlot) => selectedSlot !== slot),
+      }));
+      return;
+    }
+
+    const slotCount = getStoredRequests().filter(
+      (request) => request.day === day && request.slot === slot
+    ).length;
+
+    if (slotCount >= SLOT_CAPACITY) {
+      alert("This time slot is full.");
       return;
     }
 
@@ -57,14 +72,29 @@ function RequestSchedule() {
       return;
     }
 
-    setSelectedSlots({
-      ...selectedSlots,
-      [day]: [...current, slot],
-    });
+    setSelectedSlots((previousSlots) => ({
+      ...previousSlots,
+      [day]: [...(previousSlots[day] || []), slot],
+    }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    const updatedRequests = getStoredRequests();
+
+    Object.entries(selectedSlots).forEach(([day, slots]) => {
+      slots.forEach((slot) => {
+        updatedRequests.push({
+          id: Date.now() + Math.random(),
+          day,
+          slot,
+          status: "pending",
+        });
+      });
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRequests));
 
     alert("Gym Schedule Request Submitted Successfully!");
 
@@ -230,7 +260,10 @@ function RequestSchedule() {
                   {timeSlots.map((slot) => {
 
                     const booked =
-                      bookedSlots[day]?.includes(slot);
+                      requests.filter(
+                        (request) =>
+                          request.day === day && request.slot === slot
+                      ).length >= SLOT_CAPACITY;
 
                     const selected =
                       selectedSlots[day]?.includes(slot);

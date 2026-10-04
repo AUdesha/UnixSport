@@ -1,12 +1,25 @@
+import { useState } from "react";
 import "./PendingRequests.css";
 import "./CoachDashboard.css";
 import CoachNavbar from "./CoachNavbar";
 import CoachSidebar from "./CoachSidebar";
 
 function PendingRequests() {
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("coach-theme") !== "light"
+  );
+
+  const toggleTheme = () => {
+    setDarkMode((isDarkMode) => {
+      const nextDarkMode = !isDarkMode;
+      localStorage.setItem("coach-theme", nextDarkMode ? "dark" : "light");
+      return nextDarkMode;
+    });
+  };
+
   return (
-    <div className="coach-app dark-mode">
-      <CoachNavbar />
+    <div className={`coach-app ${darkMode ? "dark-mode" : "light-mode"}`}>
+      <CoachNavbar darkMode={darkMode} onToggleTheme={toggleTheme} />
 
       <div className="coach-body">
         <CoachSidebar />

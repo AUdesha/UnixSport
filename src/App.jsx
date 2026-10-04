@@ -11,6 +11,7 @@ import CoachDashboard from "./pages/CoachDashboard";
 import Profile from "./pages/Profile";
 import AddEvent from "./pages/AddEvent";
 import GymSchedule from "./pages/GymSchedule";
+import ScheduleCalendar from "./pages/ScheduleCalendar";
 import RequestSchedule from "./pages/RequestSchedule";
 import PendingRequests from "./pages/PendingRequests";
 
@@ -29,6 +30,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/add-event" element={<AddEvent />} />
         <Route path="/gym"element={<GymSchedule />}/>
+        <Route path="/schedule-calendar" element={<ScheduleCalendar />} />
         <Route path="/request-schedule" element={<RequestSchedule />}
         
 />
