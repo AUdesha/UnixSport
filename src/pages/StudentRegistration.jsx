@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "../css/StudentRegistration.css";
 
 function StudentRegistration() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: "",
     regNo: "",
@@ -11,6 +12,8 @@ function StudentRegistration() {
     confirmPassword: "",
     faculty: "",
   });
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -19,8 +22,9 @@ function StudentRegistration() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const isUniversityEmail = /^[^\s@]+@[^\s@]+\.(edu|ac)(\.[a-z]{2,})?$/i.test(formData.email);
 
     if (
       !formData.fullName ||
@@ -30,16 +34,41 @@ function StudentRegistration() {
       !formData.confirmPassword ||
       !formData.faculty
     ) {
-      alert("Please fill all fields.");
+      setError("Please fill all fields.");
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match.");
+      setError("Passwords do not match.");
       return;
     }
 
-    alert("Registration Successful!");
+    if (!isUniversityEmail) {
+      setError("Use a valid university email ending in .edu or .ac.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/students/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message);
+      }
+
+      navigate("/login");
+    } catch (registrationError) {
+      setError(registrationError.message || "Unable to register.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -114,10 +143,12 @@ function StudentRegistration() {
             <option value="Medicine">Medicine</option>
           </select>
 
-          <button type="submit" className="register-btn">
-            Register
+          <button type="submit" className="register-btn" disabled={isSubmitting}>
+            {isSubmitting ? "Registering..." : "Register"}
           </button>
         </form>
+
+        {error && <p role="alert">{error}</p>}
 
         <p className="login-link">
           Already has an account?{" "}
