@@ -6,6 +6,10 @@
   background:#f4f7fc;
 }
 
+body.dark-mode .login-page{
+  background:#0b1220;
+}
+
 .login-card{
   
   width: 400px;
@@ -31,9 +35,43 @@
   color:#0f172a;
 }
 
+body.dark-mode .login-card h2{
+  color:#f1f5f9;
+}
+
 .login-form{
   display:flex;
   flex-direction:column;
+  gap:14px;
+}
+
+.success-message{
+  padding:10px;
+  border:1px solid #86efac;
+  border-radius:6px;
+  background:#f0fdf4;
+  color:#166534;
+  text-align:center;
+}
+
+.login-portal-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 16px;
+  padding:10px 12px;
+  border-left:3px solid #2563eb;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:14px;
+  font-weight:600;
+}
+
+.login-portal-heading a{
+  color:#1d4ed8;
+  font-size:13px;
+  font-weight:500;
 }
 
 .login-form label{
@@ -52,7 +90,7 @@
 }
 
 .login-form button{
-  margin-top:20px;
+  margin-top:4px;
   padding:12px;
   border:none;
   border-radius:8px;

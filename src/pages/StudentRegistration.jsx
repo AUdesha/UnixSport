@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { createStudentEmail } from "../../shared/studentEmail.js";
 import "../css/StudentRegistration.css";
 
 function StudentRegistration() {
@@ -7,13 +8,13 @@ function StudentRegistration() {
   const [formData, setFormData] = useState({
     fullName: "",
     regNo: "",
-    email: "",
     password: "",
     confirmPassword: "",
     faculty: "",
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const generatedEmail = createStudentEmail(formData.regNo, formData.faculty);
 
   const handleChange = (e) => {
     setFormData({
@@ -24,12 +25,9 @@ function StudentRegistration() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const isUniversityEmail = /^[^\s@]+@[^\s@]+\.(edu|ac)(\.[a-z]{2,})?$/i.test(formData.email);
-
     if (
       !formData.fullName ||
       !formData.regNo ||
-      !formData.email ||
       !formData.password ||
       !formData.confirmPassword ||
       !formData.faculty
@@ -38,13 +36,13 @@ function StudentRegistration() {
       return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.");
+    if (!generatedEmail) {
+      setError("Enter a valid registration number and select a faculty.");
       return;
     }
 
-    if (!isUniversityEmail) {
-      setError("Use a valid university email ending in .edu or .ac.");
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
@@ -57,15 +55,21 @@ function StudentRegistration() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message);
+        throw new Error(data.message || "Student server unavailable. Run npm run server from the sport folder.");
       }
 
-      navigate("/login");
+      navigate("/login", {
+        state: { userType: "Student", successMessage: "Successfully registered. You can now log in." },
+      });
     } catch (registrationError) {
-      setError(registrationError.message || "Unable to register.");
+      setError(
+        registrationError instanceof TypeError
+          ? "Cannot reach the student server. Run npm run server from the sport folder."
+          : registrationError.message || "Unable to register."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -75,7 +79,7 @@ function StudentRegistration() {
     <div className="register-container">
       <div className="register-card">
         <img
-          src="/University logo.jpg"
+          src="/rajarata.png"
           alt="University Logo"
           className="login-logo"
         />
@@ -97,15 +101,6 @@ function StudentRegistration() {
             name="regNo"
             placeholder="Student Registration No"
             value={formData.regNo}
-            onChange={handleChange}
-            required
-          />
-
-          <input
-            type="email"
-            name="email"
-            placeholder="University Email"
-            value={formData.email}
             onChange={handleChange}
             required
           />
@@ -143,6 +138,14 @@ function StudentRegistration() {
             <option value="Medicine">Medicine</option>
           </select>
 
+          <input
+            type="email"
+            value={generatedEmail}
+            placeholder="University email generated from registration number"
+            aria-label="Generated university email"
+            readOnly
+          />
+
           <button type="submit" className="register-btn" disabled={isSubmitting}>
             {isSubmitting ? "Registering..." : "Register"}
           </button>
@@ -152,7 +155,7 @@ function StudentRegistration() {
 
         <p className="login-link">
           Already has an account?{" "}
-          <Link to="/login">Login</Link>
+          <Link to="/login" state={{ userType: "Student" }}>Login</Link>
         </p>
       </div>
     </div>

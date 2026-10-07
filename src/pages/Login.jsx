@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { isStudentEmail } from "../../shared/studentEmail.js";
 import "../css/Login.css";
 
 
 function Login() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: "", password: "", userType: "" });
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    userType: location.state?.userType || "Student",
+  });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,15 +22,13 @@ function Login() {
 
   const handleLogin = async (event) => {
     event.preventDefault();
-    const isUniversityEmail = /^[^\s@]+@[^\s@]+\.(edu|ac)(\.[a-z]{2,})?$/i.test(formData.email);
-
-    if (formData.userType !== "Student") {
-      setError("Please select Student to continue.");
+    if (!["Student", "Store Keeper", "Gym Coach", "Admin"].includes(formData.userType)) {
+      setError("Please select a user type to continue.");
       return;
     }
 
-    if (!isUniversityEmail) {
-      setError("Use your university email to log in.");
+    if (formData.userType === "Student" && !isStudentEmail(formData.email)) {
+      setError("Use the email generated from your registration number and faculty.");
       return;
     }
 
@@ -37,16 +41,34 @@ function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message);
+        throw new Error(data.message || "Student server unavailable. Run npm run server from the sport folder.");
       }
 
-      localStorage.setItem("student", JSON.stringify(data.student));
-      navigate("/student-dashboard");
+      if (data.role === "Store Keeper") {
+        localStorage.removeItem("student");
+        localStorage.removeItem("staff");
+        localStorage.setItem("storekeeper", JSON.stringify(data.storekeeper));
+        navigate("/storekeeper-dashboard");
+      } else if (data.role === "Gym Coach" || data.role === "Admin") {
+        localStorage.removeItem("student");
+        localStorage.removeItem("storekeeper");
+        localStorage.setItem("staff", JSON.stringify(data.staff));
+        navigate("/staff-notices");
+      } else {
+        localStorage.removeItem("storekeeper");
+        localStorage.removeItem("staff");
+        localStorage.setItem("student", JSON.stringify(data.student));
+        navigate("/student-dashboard");
+      }
     } catch (loginError) {
-      setError(loginError.message || "Unable to log in.");
+      setError(
+        loginError instanceof TypeError
+          ? "Cannot reach the student server. Run npm run server from the sport folder."
+          : loginError.message || "Unable to log in."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -57,42 +79,47 @@ function Login() {
       <div className="login-card">
 
         <img
-          src="/University logo.jpg"
+          src="/rajarata.png"
           alt="University Logo"
           className="login-logo"
         />
 
         <h2>Smart University Gym and Equipment System</h2>
 
+        {location.state?.successMessage && (
+          <p className="success-message" role="status">
+            {location.state.successMessage}
+          </p>
+        )}
+
+        {location.state?.errorMessage && <p role="alert">{location.state.errorMessage}</p>}
+
+        <div className="login-portal-heading">
+          <span>{formData.userType} Portal</span>
+          <Link to="/">Change portal</Link>
+        </div>
+
         <form className="login-form" onSubmit={handleLogin}>
 
-          <label></label>
           <input
             type="email"
             name="email"
-            placeholder="Enter your email"
+            aria-label="Email"
+            placeholder={formData.userType === "Store Keeper" ? "Enter your Store Keeper email" : ["Gym Coach", "Admin"].includes(formData.userType) ? "Enter your staff email" : "Enter your university email"}
             value={formData.email}
             onChange={handleChange}
             required
           />
 
-          <label></label>
           <input
             type="password"
             name="password"
+            aria-label="Password"
             placeholder="Enter your password"
             value={formData.password}
             onChange={handleChange}
             required
           />
-
-          <label></label>
-          <select id="userType" name="userType" value={formData.userType} onChange={handleChange}>
-             <option value="">Select User Type</option>
-             <option value="Student">Student</option>
-             <option value="Gym Coach">Gym Coach</option>
-             <option value="Store Keeper">Store Keeper</option>
-          </select>
 
          <button type="submit" disabled={isSubmitting}>
            {isSubmitting ? "Logging in..." : "Login"}

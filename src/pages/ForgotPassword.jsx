@@ -20,7 +20,7 @@ function ForgotPassword() {
         </Link>
 
         <p>
-          <Link to="/login">
+          <Link to="/login" state={{ userType: "Student" }}>
             Back to Login
           </Link>
         </p>

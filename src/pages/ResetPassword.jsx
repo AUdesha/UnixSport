@@ -18,7 +18,7 @@ function ResetPassword() {
           placeholder="Confirm Password"
         />
 
-        <Link to="/login">
+        <Link to="/login" state={{ userType: "Student" }}>
           <button>
             Reset Password
           </button>

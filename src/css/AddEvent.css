@@ -9,6 +9,7 @@
 
 .event-card{
     width:600px;
+    max-width:calc(100% - 32px);
     background:white;
 
     padding:30px;
@@ -66,7 +67,13 @@
     background:#1d4ed8;
 }
 
+.save-btn:disabled{
+    cursor:wait;
+    opacity:.7;
+}
+
 .back-btn{
+    display:block;
     width:100%;
     margin-top:10px;
 
@@ -83,6 +90,8 @@
     font-size:16px;
 
     cursor:pointer;
+    text-align:center;
+    text-decoration:none;
 }
 
 .back-btn:hover{

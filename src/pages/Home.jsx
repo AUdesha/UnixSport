@@ -2,29 +2,25 @@ import { Link } from "react-router-dom";
 import "../css/Home.css";
 import { useState, useEffect } from "react";
 
+const portals = [
+  { role: "Student", number: "01" },
+  { role: "Gym Coach", number: "02" },
+  { role: "Store Keeper", number: "03" },
+  { role: "Admin", number: "04" },
+];
+
 function Home() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 
-useEffect(() => {
-  const savedTheme = localStorage.getItem("theme");
+  useEffect(() => {
+    document.body.classList.toggle("dark-mode", darkMode);
+  }, [darkMode]);
 
-  if (savedTheme === "dark") {
-    setDarkMode(true);
-    document.body.classList.add("dark-mode");
-  }
-}, []);
-
-const toggleTheme = () => {
-  if (darkMode) {
-    document.body.classList.remove("dark-mode");
-    localStorage.setItem("theme", "light");
-  } else {
-    document.body.classList.add("dark-mode");
-    localStorage.setItem("theme", "dark");
-  }
-
-  setDarkMode(!darkMode);
-};
+  const toggleTheme = () => {
+    const nextDarkMode = !darkMode;
+    localStorage.setItem("theme", nextDarkMode ? "dark" : "light");
+    setDarkMode(nextDarkMode);
+  };
   return (
     
     <div className="home-container">
@@ -54,7 +50,7 @@ const toggleTheme = () => {
       <section className="hero">
 
         <img
-          src="/University logo.jpg"
+          src="/rajarata.png"
           alt="University Logo"
           className="university-logo"
         />
@@ -64,25 +60,40 @@ const toggleTheme = () => {
         </h1>
 
         <p>
-          Efficiently manage sports and gym equipment
+          Efficiently manage gym schedule and sports equipment
           borrowing, tracking and returning.
         </p>
 
         <div className="button-group">
-          <Link to="/login">
-            <button className="login-btn">
-              Login
-            </button>
-          </Link>
-
-          <Link to="/student-registration">
-            <button className="register-btn">
-              Student Registration
-            </button>
-          </Link>
+          <a href="#portals" className="login-btn">Choose a Portal</a>
+          <Link to="/student-registration" className="register-btn">Student Registration</Link>
         </div>
 
       </section>
+
+      <section className="portal-section" id="portals" aria-labelledby="portal-heading">
+        <div className="portal-section-heading">
+          <p>UniXSport access</p>
+          <h2 id="portal-heading">Choose your portal</h2>
+        </div>
+
+        <div className="portal-grid">
+          {portals.map((portal) => (
+            <Link
+              key={portal.role}
+              to="/login"
+              state={{ userType: portal.role }}
+              className="portal-card"
+            >
+              <span className="portal-number" aria-hidden="true">{portal.number}</span>
+              <h3>{portal.role}</h3>
+              <p>{portal.description}</p>
+              <span className="portal-action">Continue to login <span aria-hidden="true">→</span></span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <footer className="footer">
   <div className="footer-content">
 

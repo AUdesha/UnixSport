@@ -10,8 +10,23 @@ body{
 }
 
 .home-container{
+  --home-bg:#f4f7fc;
+  --home-surface:#fff;
+  --home-text:#0f172a;
+  --home-muted:#475569;
+  --home-border:#d6deea;
   min-height: 100vh;
-  background: #F4F7FC;
+  background:var(--home-bg);
+  color:var(--home-text);
+}
+
+body.dark-mode .home-container{
+  --home-bg:#0b1220;
+  --home-surface:#111c30;
+  --home-text:#f1f5f9;
+  --home-muted:#cbd5e1;
+  --home-border:#334155;
+  background:var(--home-bg);
 
 }
 
@@ -84,14 +99,14 @@ body{
   max-width:1000px;
   margin:auto;
   font-size:48px;
-  color:#0f172a;
+  color:var(--home-text);
   line-height:1.3;
 }
 
 .hero p{
   margin-top:20px;
   font-size:20px;
-  color:#555;
+  color:var(--home-muted);
 }
 
 /* BUTTONS */
@@ -105,6 +120,9 @@ body{
 
 .login-btn,
 .register-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 220px;
   height: 55px;
   border: none;
@@ -114,6 +132,7 @@ body{
   font-size: 18px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
   transition: 0.3s;
 }
 
@@ -121,6 +140,102 @@ body{
 .register-btn:hover {
   background-color: #1d4ed8;
   transform: translateY(-2px);
+}
+
+.portal-section {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 4px 50px 72px;
+}
+
+.portal-section-heading {
+  margin-bottom: 20px;
+}
+
+.portal-section-heading p {
+  margin: 0 0 6px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.portal-section-heading h2 {
+  color: var(--home-text);
+  font-size: 28px;
+}
+
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.portal-card {
+  min-height: 205px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--home-border);
+  border-top: 3px solid #2563eb;
+  border-radius: 6px;
+  background: var(--home-surface);
+  color: var(--home-text);
+  text-decoration: none;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.portal-card:nth-child(2) {
+  border-top-color: #0f766e;
+}
+
+.portal-card:nth-child(3) {
+  border-top-color: #c2410c;
+}
+
+.portal-card:nth-child(4) {
+  border-top-color: #475569;
+}
+
+.portal-card:hover,
+.portal-card:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .1);
+  transform: translateY(-2px);
+}
+
+.portal-number {
+  color: var(--home-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.portal-card h3 {
+  margin: 14px 0 7px;
+  color: var(--home-text);
+  font-size: 19px;
+}
+
+.portal-card p {
+  margin: 0 0 18px;
+  color: var(--home-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.portal-action {
+  display: flex;
+  gap: 7px;
+  margin-top: auto;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+body.dark-mode .portal-section-heading p,
+body.dark-mode .portal-action {
+  color:#93c5fd;
 }
 
 /* MOBILE */
@@ -132,15 +247,67 @@ body{
   }
 
   .hero h1{
-    font-size:32px;
+    font-size:28px;
+    line-height:1.2;
   }
 
   .hero p{
-    font-size:16px;
+    margin-top:10px;
+    font-size:15px;
   }
 
   .university-logo{
-    width:140px;
+    width:84px;
+    margin-bottom:8px;
+  }
+
+  .hero {
+    padding:20px 20px 16px;
+  }
+
+  .button-group {
+    flex-wrap: wrap;
+    gap:10px;
+    margin-top:14px;
+  }
+
+  .button-group .login-btn,
+  .button-group .register-btn {
+    width:auto;
+    height:48px;
+    flex:1 1 140px;
+    max-width:220px;
+    font-size:16px;
+  }
+
+  .portal-section {
+    padding: 0 20px 48px;
+  }
+
+  .portal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media(max-width:520px) {
+  .portal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+
+  .portal-card {
+    min-height: 185px;
+    padding:14px;
+  }
+
+  .portal-card h3 {
+    margin-top:10px;
+    font-size:17px;
+  }
+
+  .portal-card p,
+  .portal-action {
+    font-size:13px;
   }
 }
 /* FOOTER*/
@@ -183,6 +350,18 @@ body{
   padding-top: 15px;
   font-size: 14px;
 }
+
+@media(max-width:900px) {
+  .portal-section {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .portal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .theme-btn {
   background: #2563eb;
   color: white;
@@ -195,4 +374,8 @@ body{
 
 .theme-btn:hover {
   background: #1d4ed8;
+}
+
+body.dark-mode .footer {
+  background:#020617;
 }

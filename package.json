@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "server": "node server/server.js",
+    "create:storekeeper": "node server/createStorekeeper.js",
+    "create:staff": "node server/createStaffAccount.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

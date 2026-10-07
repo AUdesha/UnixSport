@@ -11,6 +11,10 @@ import Profile from "./pages/Profile";
 import AddEvent from "./pages/AddEvent";
 import GymSchedule from "./pages/GymSchedule";
 import RequestSchedule from "./pages/RequestSchedule";
+import EquipmentHistory from "./pages/EquipmentHistory";
+import StoreKeeperDashboard from "./pages/StoreKeeperDashboard";
+import Notifications from "./pages/Notifications";
+import StaffNotices from "./pages/StaffNotices";
 function App() {
   return (
     <BrowserRouter>
@@ -23,6 +27,10 @@ function App() {
         <Route path="/student-registration" element={<StudentRegistration />} />
         <Route path="/student-dashboard" element={<StudentDashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/equipment" element={<EquipmentHistory />} />
+        <Route path="/storekeeper-dashboard" element={<StoreKeeperDashboard />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/staff-notices" element={<StaffNotices />} />
         <Route path="/add-event" element={<AddEvent />} />
         <Route path="/gym"element={<GymSchedule />}/>
         <Route path="/request-schedule" element={<RequestSchedule />}
