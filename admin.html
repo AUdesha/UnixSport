@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniXsport - Admin Control Center</title>
+  <link rel="stylesheet" href="admin.css" />
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- TOP HEADER / NAVBAR -->
+  <header class="navbar">
+    <div class="nav-left">
+      <div class="logo-container">
+        <!-- University Emblem Placeholder -->
+        <div class="logo-badge">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <span class="brand-name">UniXsport</span>
+      </div>
+    </div>
+    
+    <div class="nav-right">
+      <!-- Live Clock Display -->
+      <div class="clock-badge" id="liveClock">20:24</div>
+      
+      <!-- Theme Switcher Button -->
+      <button class="nav-btn theme-toggle" id="themeToggleBtn" title="Toggle Theme">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+      
+      <!-- Quick Logout Button -->
+      <button class="nav-btn logout-btn" id="logoutBtn" title="Logout">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div class="main-layout">
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar">
+      <div class="admin-mini-profile">
+        <img src="https://via.placeholder.com/80/00d2ff/0a0f24?text=Admin" id="sidebarAvatar" alt="Admin Avatar" />
+        <div class="profile-info">
+          <h4 id="sidebarName">Admin User</h4>
+          <span class="badge badge-admin">Super Admin</span>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <button class="nav-link active" data-tab="dashboard">
+          <i class="fa-solid fa-chart-line"></i> Dashboard
+        </button>
+        <button class="nav-link" data-tab="users">
+          <i class="fa-solid fa-users"></i> User Management
+        </button>
+        <button class="nav-link" data-tab="equipment">
+          <i class="fa-solid fa-dumbbell"></i> Equipment Management
+        </button>
+        <button class="nav-link" data-tab="notices">
+          <i class="fa-solid fa-bullhorn"></i> Notices & Broadcasts
+        </button>
+        <button class="nav-link" data-tab="profile">
+          <i class="fa-solid fa-user-gear"></i> Admin Profile
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <p>Rajarata University of Sri Lanka</p>
+        <small>RUSL Sports Portal v2.4</small>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="content-body">
+
+      <!-- ================= TAB 1: DASHBOARD ================= -->
+      <section id="dashboard" class="tab-content active">
+        <div class="hero-header card">
+          <div class="hero-crest">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <h1>Rajarata University of Sri Lanka</h1>
+          <p class="subtitle">RUSL Physical Education & Sports Portal — Admin Control Center</p>
+        </div>
+
+        <!-- OVERVIEW STAT CARDS -->
+        <div class="stats-grid">
+          <div class="stat-card card">
+            <div class="stat-icon icon-blue"><i class="fa-solid fa-user-graduate"></i></div>
+            <div class="stat-info">
+              <h3>Total Students</h3>
+              <p class="stat-number" id="statStudents">0</p>
+            </div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-icon icon-teal"><i class="fa-solid fa-user-tie"></i></div>
+            <div class="stat-info">
+              <h3>Total Coaches</h3>
+              <p class="stat-number" id="statCoaches">0</p>
+            </div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-icon icon-purple"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="stat-info">
+              <h3>Total Equipment</h3>
+              <p class="stat-number" id="statEquipment">0</p>
+            </div>
+          </div>
+          <div class="stat-card card">
+            <div class="stat-icon icon-orange"><i class="fa-solid fa-wrench"></i></div>
+            <div class="stat-info">
+              <h3>Needs Repair / Damaged</h3>
+              <p class="stat-number" id="statDamaged">0</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- DASHBOARD SPLIT VIEW -->
+        <div class="dashboard-grid">
+          <!-- Equipment Breakdown Widget -->
+          <div class="card widget">
+            <h2><i class="fa-solid fa-pie-chart"></i> Equipment Status Breakdown</h2>
+            <div class="breakdown-list" id="equipmentBreakdown">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Quick Actions & Recent Notices Widget -->
+          <div class="card widget">
+            <h2><i class="fa-solid fa-bolt"></i> Quick Links & Actions</h2>
+            <div class="quick-links">
+              <button class="btn btn-primary" onclick="switchTab('users'); openUserModal();">
+                <i class="fa-solid fa-user-plus"></i> Add User
+              </button>
+              <button class="btn btn-secondary" onclick="switchTab('equipment'); openEquipModal();">
+                <i class="fa-solid fa-plus"></i> Add Equipment
+              </button>
+              <button class="btn btn-accent" onclick="switchTab('notices'); openNoticeModal();">
+                <i class="fa-solid fa-paper-plane"></i> Broadcast Notice
+              </button>
+            </div>
+
+            <h3 class="sub-heading"><i class="fa-solid fa-bell"></i> Recent Notices</h3>
+            <div class="recent-notices-list" id="recentNoticesList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: USER MANAGEMENT ================= -->
+      <section id="users" class="tab-content">
+        <div class="section-header card">
+          <div>
+            <h2><i class="fa-solid fa-users"></i> User Management</h2>
+            <p>Manage students and coaching staff profiles, roles, and RFID tags.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openUserModal()">
+            <i class="fa-solid fa-user-plus"></i> Add New User
+          </button>
+        </div>
+
+        <div class="card">
+          <!-- Filters & Search Bar -->
+          <div class="toolbar">
+            <div class="tabs-sub">
+              <button class="sub-tab active" data-filter-role="ALL" onclick="filterUserRole('ALL', this)">All</button>
+              <button class="sub-tab" data-filter-role="Student" onclick="filterUserRole('Student', this)">Students</button>
+              <button class="sub-tab" data-filter-role="Coach" onclick="filterUserRole('Coach', this)">Coaches</button>
+            </div>
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="userSearchInput" placeholder="Search by name or email..." oninput="renderUsers()" />
+            </div>
+          </div>
+
+          <!-- Users Data Table -->
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>RFID Code</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: EQUIPMENT MANAGEMENT ================= -->
+      <section id="equipment" class="tab-content">
+        <div class="section-header card">
+          <div>
+            <h2><i class="fa-solid fa-dumbbell"></i> Gym & Sports Equipment Management</h2>
+            <p>Full CRUD tracking for inventory status and sports rooms.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openEquipModal()">
+            <i class="fa-solid fa-plus"></i> Add New Item
+          </button>
+        </div>
+
+        <div class="card">
+          <!-- Filters & Search Toolbar -->
+          <div class="toolbar flex-wrap">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="equipSearchInput" placeholder="Search equipment..." oninput="renderEquipment()" />
+            </div>
+            
+            <div class="filter-group">
+              <select id="equipStatusFilter" onchange="renderEquipment()">
+                <option value="ALL">All Statuses</option>
+                <option value="Available">Available</option>
+                <option value="Borrowed">Borrowed</option>
+                <option value="Damaged">Damaged / Repair Needed</option>
+              </select>
+
+              <select id="equipRoomFilter" onchange="renderEquipment()">
+                <option value="ALL">All Sports Rooms</option>
+                <option value="Main Gym Hall">Main Gym Hall</option>
+                <option value="Badminton Court">Badminton Court</option>
+                <option value="Cricket Pavilion">Cricket Pavilion</option>
+                <option value="Indoor Complex">Indoor Complex</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Equipment Data Table -->
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Sports Room</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="equipTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: NOTICES & BROADCASTS ================= -->
+      <section id="notices" class="tab-content">
+        <div class="section-header card">
+          <div>
+            <h2><i class="fa-solid fa-bullhorn"></i> Notices & Announcements</h2>
+            <p>Broadcast alerts and announcements to Students and Coaches.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openNoticeModal()">
+            <i class="fa-solid fa-paper-plane"></i> Create Notice
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="notice-grid" id="noticesGrid">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: ADMIN PROFILE ================= -->
+      <section id="profile" class="tab-content">
+        <div class="section-header card">
+          <div>
+            <h2><i class="fa-solid fa-user-gear"></i> Admin Account Settings</h2>
+            <p>Update personal information, change profile photo, or secure account credentials.</p>
+          </div>
+        </div>
+
+        <div class="profile-layout">
+          <!-- Profile Card -->
+          <div class="card profile-card">
+            <div class="avatar-upload">
+              <img src="https://via.placeholder.com/120/00d2ff/0a0f24?text=Admin" id="profileAvatarPreview" alt="Profile Picture" />
+              <label for="avatarInput" class="upload-btn"><i class="fa-solid fa-camera"></i> Change Photo</label>
+              <input type="file" id="avatarInput" accept="image/*" onchange="handleAvatarUpload(event)" hidden />
+            </div>
+            <h3 id="profileCardName">Admin User</h3>
+            <p id="profileCardEmail">admin@rajarata.ac.lk</p>
+            <span class="badge badge-admin mt-2">Super Administrator</span>
+          </div>
+
+          <!-- Edit Profile Forms -->
+          <div class="card profile-forms">
+            <form id="profileDetailsForm" onsubmit="handleSaveProfile(event)">
+              <h3><i class="fa-solid fa-id-card"></i> Personal Details</h3>
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="adminFullName" value="Admin User" required />
+              </div>
+              <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="adminEmail" value="admin@rajarata.ac.lk" required />
+              </div>
+              <button type="submit" class="btn btn-primary">Save Profile Info</button>
+            </form>
+
+            <hr class="divider" />
+
+            <form id="profilePasswordForm" onsubmit="handleChangePassword(event)">
+              <h3><i class="fa-solid fa-key"></i> Security & Password</h3>
+              <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" id="currentPassword" placeholder="••••••••" required />
+              </div>
+              <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="newPassword" placeholder="••••••••" required />
+              </div>
+              <div class="form-group">
+                <label>Confirm New Password</label>
+                <input type="password" id="confirmPassword" placeholder="••••••••" required />
+              </div>
+              <button type="submit" class="btn btn-secondary">Update Password</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- User Modal (Add / Edit) -->
+  <div class="modal-backdrop" id="userModal">
+    <div class="modal card">
+      <div class="modal-header">
+        <h3 id="userModalTitle">Add New User</h3>
+        <button class="close-btn" onclick="closeUserModal()">&times;</button>
+      </div>
+      <form id="userForm" onsubmit="saveUser(event)">
+        <input type="hidden" id="userId" />
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="userName" placeholder="e.g. Supun Perera" required />
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="userEmail" placeholder="student@rajarata.ac.lk" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Role</label>
+            <select id="userRole" required>
+              <option value="Student">Student</option>
+              <option value="Coach">Coach</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>RFID Code Tag</label>
+            <input type="text" id="userRfid" placeholder="e.g. RFID-99201" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-dark" onclick="closeUserModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Equipment Modal (Add / Edit) -->
+  <div class="modal-backdrop" id="equipModal">
+    <div class="modal card">
+      <div class="modal-header">
+        <h3 id="equipModalTitle">Add Equipment Item</h3>
+        <button class="close-btn" onclick="closeEquipModal()">&times;</button>
+      </div>
+      <form id="equipForm" onsubmit="saveEquip(event)">
+        <input type="hidden" id="equipId" />
+        <div class="form-group">
+          <label>Equipment Name</label>
+          <input type="text" id="equipName" placeholder="e.g. Treadmill Pro T80" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Sports Room / Location</label>
+            <select id="equipRoom" required>
+              <option value="Main Gym Hall">Main Gym Hall</option>
+              <option value="Badminton Court">Badminton Court</option>
+              <option value="Cricket Pavilion">Cricket Pavilion</option>
+              <option value="Indoor Complex">Indoor Complex</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Quantity</label>
+            <input type="number" id="equipQty" min="1" value="1" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="equipStatus" required>
+            <option value="Available">Available</option>
+            <option value="Borrowed">Borrowed</option>
+            <option value="Damaged">Damaged / Repair Needed</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-dark" onclick="closeEquipModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Equipment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notice Modal (Create) -->
+  <div class="modal-backdrop" id="noticeModal">
+    <div class="modal card">
+      <div class="modal-header">
+        <h3>Broadcast New Notice</h3>
+        <button class="close-btn" onclick="closeNoticeModal()">&times;</button>
+      </div>
+      <form id="noticeForm" onsubmit="saveNotice(event)">
+        <div class="form-group">
+          <label>Notice Title</label>
+          <input type="text" id="noticeTitle" placeholder="e.g. Gym Maintenance Notice" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Visible To</label>
+            <select id="noticeAudience" required>
+              <option value="All">All Portal Users</option>
+              <option value="Students">Students Only</option>
+              <option value="Coaches">Coaches Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Priority Level</label>
+            <select id="noticePriority" required>
+              <option value="Normal">Normal</option>
+              <option value="High">High Priority</option>
+              <option value="Urgent">Urgent Alert</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Message Content</label>
+          <textarea id="noticeMessage" rows="4" placeholder="Type notice content here..." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-dark" onclick="closeNoticeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Publish Broadcast</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
