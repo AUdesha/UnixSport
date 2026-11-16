@@ -80,9 +80,35 @@ database.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     item_name TEXT NOT NULL,
+    equipment_id INTEGER REFERENCES equipment_items(id),
     borrowed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     due_at TEXT,
     returned_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS equipment_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS equipment_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER NOT NULL REFERENCES equipment_categories(id),
+    item_code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    rfid_tag TEXT UNIQUE,
+    status TEXT NOT NULL DEFAULT 'available'
+      CHECK (status IN ('available', 'borrowed', 'damaged', 'removed')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS published_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE INDEX IF NOT EXISTS equipment_loans_student_borrowed
@@ -100,6 +126,19 @@ database.exec(`
   CREATE INDEX IF NOT EXISTS student_events_owner_date
     ON student_events(student_id, event_date, id DESC);
 `);
+
+const studentColumns = database.prepare("PRAGMA table_info(students)").all().map((column) => column.name);
+if (!studentColumns.includes("rfid_tag")) {
+  database.exec("ALTER TABLE students ADD COLUMN rfid_tag TEXT");
+  database.exec("CREATE UNIQUE INDEX students_rfid_tag_unique ON students(rfid_tag) WHERE rfid_tag IS NOT NULL");
+}
+
+const loanColumns = database.prepare("PRAGMA table_info(equipment_loans)").all().map((column) => column.name);
+if (!loanColumns.includes("equipment_id")) {
+  database.exec("ALTER TABLE equipment_loans ADD COLUMN equipment_id INTEGER REFERENCES equipment_items(id)");
+}
+
+database.exec("CREATE INDEX IF NOT EXISTS equipment_items_category_status ON equipment_items(category_id, status)");
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "10kb" }));
@@ -284,6 +323,342 @@ app.post("/api/logout", (request, response) => {
   return response.json({ message: "Logged out." });
 });
 
+app.get("/api/home/summary", (_request, response) => {
+  const users = database.prepare(`
+    SELECT (SELECT COUNT(*) FROM students) +
+           (SELECT COUNT(*) FROM storekeepers) +
+           (SELECT COUNT(*) FROM staff_accounts) AS count
+  `).get().count;
+  const categories = database.prepare("SELECT COUNT(*) AS count FROM equipment_categories").get().count;
+  const events = database.prepare(`
+    SELECT id, title, event_date AS eventDate, description
+    FROM published_events
+    WHERE event_date >= date('now')
+    ORDER BY event_date ASC, id DESC
+    LIMIT 4
+  `).all();
+  return response.json({ users, categories, events });
+});
+
+app.post("/api/staff/events", (request, response) => {
+  const session = sessionForRequest(request);
+  if (!session?.staff_id) {
+    return response.status(401).json({ message: "Log in as a Coach or Admin to publish events." });
+  }
+
+  const { title, eventDate, description } = request.body;
+  if (
+    typeof title !== "string" || !title.trim() || title.length > 120 ||
+    typeof eventDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) ||
+    typeof description !== "string" || !description.trim() || description.length > 4000
+  ) {
+    return response.status(400).json({ message: "Enter an event title, valid date, and description." });
+  }
+
+  const parsedDate = new Date(`${eventDate}T00:00:00.000Z`);
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== eventDate) {
+    return response.status(400).json({ message: "Enter a valid event date." });
+  }
+
+  const result = database.prepare(`
+    INSERT INTO published_events (title, event_date, description)
+    VALUES (?, ?, ?)
+  `).run(title.trim(), eventDate, description.trim());
+  return response.status(201).json({ event: database.prepare(`
+    SELECT id, title, event_date AS eventDate, description
+    FROM published_events WHERE id = ?
+  `).get(result.lastInsertRowid) });
+});
+
+app.get("/api/storekeeper/categories", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const categories = database.prepare(`
+    SELECT equipment_categories.id, equipment_categories.name,
+           COUNT(equipment_items.id) AS itemCount
+    FROM equipment_categories
+    LEFT JOIN equipment_items ON equipment_items.category_id = equipment_categories.id
+      AND equipment_items.status != 'removed'
+    GROUP BY equipment_categories.id
+    ORDER BY equipment_categories.name COLLATE NOCASE
+  `).all();
+  return response.json({ categories });
+});
+
+app.post("/api/storekeeper/categories", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { name } = request.body;
+  if (typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+    return response.status(400).json({ message: "Enter a category name up to 80 characters." });
+  }
+  try {
+    const result = database.prepare("INSERT INTO equipment_categories (name) VALUES (?)").run(name.trim());
+    return response.status(201).json({ category: { id: result.lastInsertRowid, name: name.trim(), itemCount: 0 } });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That category already exists." });
+    throw error;
+  }
+});
+
+app.patch("/api/storekeeper/categories/:id", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { name } = request.body;
+  if (!/^\d+$/.test(request.params.id) || typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+    return response.status(400).json({ message: "Enter a valid category name." });
+  }
+  try {
+    const result = database.prepare("UPDATE equipment_categories SET name = ? WHERE id = ?").run(name.trim(), Number(request.params.id));
+    if (!result.changes) return response.status(404).json({ message: "Equipment category not found." });
+    return response.json({ message: "Category updated." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That category already exists." });
+    throw error;
+  }
+});
+
+app.get("/api/storekeeper/equipment", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const query = typeof request.query.search === "string" ? `%${request.query.search.trim()}%` : "%";
+  const equipment = database.prepare(`
+    SELECT equipment_items.id, equipment_items.item_code AS itemCode, equipment_items.name,
+           equipment_items.rfid_tag AS rfidTag, equipment_items.status,
+           equipment_categories.id AS categoryId, equipment_categories.name AS category
+    FROM equipment_items
+    JOIN equipment_categories ON equipment_categories.id = equipment_items.category_id
+    WHERE equipment_items.status != 'removed'
+      AND (equipment_items.item_code LIKE ? OR equipment_items.name LIKE ?)
+    ORDER BY equipment_items.name COLLATE NOCASE, equipment_items.item_code
+  `).all(query, query);
+  return response.json({ equipment });
+});
+
+app.post("/api/storekeeper/equipment", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { categoryId, itemCode, name } = request.body;
+  if (
+    !Number.isInteger(categoryId) || typeof itemCode !== "string" || !itemCode.trim() || itemCode.trim().length > 50 ||
+    typeof name !== "string" || !name.trim() || name.trim().length > 120
+  ) {
+    return response.status(400).json({ message: "Enter a category, equipment ID, and name." });
+  }
+  try {
+    const result = database.prepare(`
+      INSERT INTO equipment_items (category_id, item_code, name)
+      VALUES (?, ?, ?)
+    `).run(categoryId, itemCode.trim(), name.trim());
+    return response.status(201).json({ equipment: database.prepare(`
+      SELECT equipment_items.id, equipment_items.item_code AS itemCode, equipment_items.name,
+             equipment_items.rfid_tag AS rfidTag, equipment_items.status,
+             equipment_categories.id AS categoryId, equipment_categories.name AS category
+      FROM equipment_items JOIN equipment_categories ON equipment_categories.id = equipment_items.category_id
+      WHERE equipment_items.id = ?
+    `).get(result.lastInsertRowid) });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That equipment ID already exists." });
+    if (error.code === "SQLITE_CONSTRAINT_FOREIGNKEY") return response.status(404).json({ message: "Equipment category not found." });
+    throw error;
+  }
+});
+
+app.patch("/api/storekeeper/equipment/:id", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { name, categoryId, itemCode, status } = request.body;
+  if (!/^\d+$/.test(request.params.id)) return response.status(400).json({ message: "Invalid equipment item." });
+
+  if (status !== undefined) {
+    if (!["available", "damaged", "removed"].includes(status)) {
+      return response.status(400).json({ message: "Choose available, damaged, or removed status." });
+    }
+    const result = database.prepare(`
+      UPDATE equipment_items SET status = ? WHERE id = ? AND status != 'borrowed'
+    `).run(status, Number(request.params.id));
+    if (!result.changes) return response.status(409).json({ message: "Borrowed equipment cannot be changed here." });
+    return response.json({ message: "Equipment status updated." });
+  }
+
+  if (
+    typeof name !== "string" || !name.trim() || name.trim().length > 120 || !Number.isInteger(categoryId) ||
+    (itemCode !== undefined && (typeof itemCode !== "string" || !itemCode.trim() || itemCode.trim().length > 50))
+  ) {
+    return response.status(400).json({ message: "Enter a category and equipment name." });
+  }
+  try {
+    const result = database.prepare(`
+      UPDATE equipment_items SET name = ?, category_id = ?, item_code = COALESCE(?, item_code)
+      WHERE id = ? AND status != 'removed'
+    `).run(name.trim(), categoryId, itemCode?.trim() || null, Number(request.params.id));
+    if (!result.changes) return response.status(404).json({ message: "Equipment item not found." });
+    return response.json({ message: "Equipment details updated." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That equipment ID already exists." });
+    if (error.code === "SQLITE_CONSTRAINT_FOREIGNKEY") return response.status(404).json({ message: "Equipment category not found." });
+    throw error;
+  }
+});
+
+app.get("/api/storekeeper/students", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const regNo = typeof request.query.regNo === "string" ? request.query.regNo.trim() : "";
+  if (!regNo) return response.json({ students: [] });
+  const students = database.prepare(`
+    SELECT id, full_name AS fullName, registration_number AS regNo,
+           faculty, rfid_tag AS rfidTag
+    FROM students
+    WHERE registration_number LIKE ? COLLATE NOCASE
+    ORDER BY registration_number LIMIT 10
+  `).all(`%${regNo}%`);
+  return response.json({ students });
+});
+
+app.post("/api/storekeeper/students/:id/rfid", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { tag } = request.body;
+  if (!/^\d+$/.test(request.params.id) || typeof tag !== "string" || !tag.trim() || tag.trim().length > 100) {
+    return response.status(400).json({ message: "Enter a student and RFID tag." });
+  }
+  if (database.prepare("SELECT id FROM equipment_items WHERE rfid_tag = ?").get(tag.trim())) {
+    return response.status(409).json({ message: "That RFID tag is already assigned to equipment." });
+  }
+  try {
+    const result = database.prepare("UPDATE students SET rfid_tag = ? WHERE id = ?").run(tag.trim(), Number(request.params.id));
+    if (!result.changes) return response.status(404).json({ message: "Student not found." });
+    return response.json({ message: "RFID tag assigned to student." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That RFID tag is already assigned." });
+    throw error;
+  }
+});
+
+app.post("/api/storekeeper/equipment/:id/rfid", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { tag } = request.body;
+  if (!/^\d+$/.test(request.params.id) || typeof tag !== "string" || !tag.trim() || tag.trim().length > 100) {
+    return response.status(400).json({ message: "Enter an equipment item and RFID tag." });
+  }
+  if (database.prepare("SELECT id FROM students WHERE rfid_tag = ?").get(tag.trim())) {
+    return response.status(409).json({ message: "That RFID tag is already assigned to a student." });
+  }
+  try {
+    const result = database.prepare("UPDATE equipment_items SET rfid_tag = ? WHERE id = ? AND status != 'removed'").run(tag.trim(), Number(request.params.id));
+    if (!result.changes) return response.status(404).json({ message: "Equipment item not found." });
+    return response.json({ message: "RFID card assigned to equipment." });
+  } catch (error) {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That RFID tag is already assigned." });
+    throw error;
+  }
+});
+
+app.get("/api/storekeeper/scan/:tag", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const tag = request.params.tag.trim();
+  const student = database.prepare(`
+    SELECT id, full_name AS fullName, registration_number AS regNo, faculty
+    FROM students WHERE rfid_tag = ?
+  `).get(tag);
+  if (student) return response.json({ type: "student", student });
+  const equipment = database.prepare(`
+    SELECT equipment_items.id, equipment_items.item_code AS itemCode, equipment_items.name,
+           equipment_items.status, equipment_categories.name AS category
+    FROM equipment_items JOIN equipment_categories ON equipment_categories.id = equipment_items.category_id
+    WHERE equipment_items.rfid_tag = ? OR equipment_items.item_code = ?
+  `).get(tag, tag);
+  if (equipment) return response.json({ type: "equipment", equipment });
+  return response.status(404).json({ message: "No student or equipment matches this RFID value." });
+});
+
+app.get("/api/storekeeper/notices", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to view notices." });
+  }
+  const notices = database.prepare(`
+    SELECT notices.id, notices.title, notices.message, notices.sent_at AS sentAt,
+           staff_accounts.role AS senderRole
+    FROM notices JOIN staff_accounts ON staff_accounts.id = notices.staff_id
+    ORDER BY notices.sent_at DESC, notices.id DESC LIMIT 50
+  `).all();
+  return response.json({ notices });
+});
+
+app.get("/api/storekeeper/reports/monthly", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to view reports." });
+  }
+  const month = typeof request.query.month === "string" ? request.query.month : "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    return response.status(400).json({ message: "Choose a valid report month." });
+  }
+  const loans = database.prepare(`
+    SELECT equipment_loans.id, students.full_name AS studentName,
+           students.registration_number AS regNo, equipment_loans.item_name AS itemName,
+           equipment_loans.borrowed_at AS borrowedAt, equipment_loans.due_at AS dueAt,
+           equipment_loans.returned_at AS returnedAt
+    FROM equipment_loans JOIN students ON students.id = equipment_loans.student_id
+    WHERE substr(equipment_loans.borrowed_at, 1, 7) = ?
+    ORDER BY equipment_loans.borrowed_at, equipment_loans.id
+  `).all(month);
+  return response.json({ month, loans });
+});
+
+app.post("/api/storekeeper/equipment-loans/issue", (request, response) => {
+  if (!storekeeperIdForRequest(request)) {
+    return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
+  }
+  const { regNo, equipmentIds, dueAt } = request.body;
+  if (
+    typeof regNo !== "string" || !regNo.trim() || !Array.isArray(equipmentIds) ||
+    !equipmentIds.length || equipmentIds.length > 30 ||
+    equipmentIds.some((id) => !Number.isInteger(id) || id < 1) ||
+    new Set(equipmentIds).size !== equipmentIds.length ||
+    typeof dueAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueAt)
+  ) {
+    return response.status(400).json({ message: "Select a student, equipment, and due date." });
+  }
+  const student = database.prepare("SELECT id FROM students WHERE lower(trim(registration_number)) = lower(?)").get(regNo.trim());
+  if (!student) return response.status(404).json({ message: "No student found with that university ID." });
+  const parsedDate = new Date(`${dueAt}T00:00:00.000Z`);
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dueAt) {
+    return response.status(400).json({ message: "Enter a valid due date." });
+  }
+
+  try {
+    const issueItems = database.transaction(() => equipmentIds.map((id) => {
+      const item = database.prepare(`
+        SELECT id, name, status FROM equipment_items WHERE id = ?
+      `).get(id);
+      if (!item || item.status !== "available") throw new Error("An equipment item is no longer available. Refresh the list and try again.");
+      database.prepare(`
+        INSERT INTO equipment_loans (student_id, item_name, equipment_id, due_at)
+        VALUES (?, ?, ?, ?)
+      `).run(student.id, item.name, item.id, dueAt);
+      database.prepare("UPDATE equipment_items SET status = 'borrowed' WHERE id = ?").run(item.id);
+      return { id: item.id, name: item.name };
+    }));
+    return response.status(201).json({ message: "Equipment issued.", items: issueItems() });
+  } catch (error) {
+    if (error.message.includes("no longer available")) return response.status(409).json({ message: error.message });
+    throw error;
+  }
+});
+
 app.get("/api/students/equipment-history", (request, response) => {
   const session = sessionForRequest(request);
   if (!session?.student_id) {
@@ -367,6 +742,12 @@ app.post("/api/storekeeper/equipment-loans/:id/return", (request, response) => {
     return response.status(loan ? 409 : 404).json({
       message: loan ? "This item has already been returned." : "Equipment loan not found.",
     });
+  }
+
+  const loan = database.prepare("SELECT equipment_id FROM equipment_loans WHERE id = ?").get(Number(request.params.id));
+  if (loan?.equipment_id) {
+    database.prepare("UPDATE equipment_items SET status = 'available' WHERE id = ? AND status = 'borrowed'")
+      .run(loan.equipment_id);
   }
 
   return response.json({ message: "Equipment return recorded." });
