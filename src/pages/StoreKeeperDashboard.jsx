@@ -1,590 +1,420 @@
-
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "../css/StoreKeeper.css";
+import "../css/StoreKeeperDashboard.css";
+import { buildMonthlyReportPdf } from "../monthlyReportPdf.js";
 
-const initialEquipment = [
-  { id: "EQ001", name: "Football", category: "Football", quantity: 20, available: 15, status: "Available", rfid: "RFID001" },
-  { id: "EQ002", name: "Netball", category: "Netball", quantity: 15, available: 12, status: "Available", rfid: "RFID002" },
-  { id: "EQ003", name: "Cricket Bat", category: "Cricket", quantity: 10, available: 8, status: "Available", rfid: "RFID003" },
-  { id: "EQ004", name: "Volleyball", category: "Volleyball", quantity: 12, available: 0, status: "Damaged", rfid: "RFID004" },
-];
+const api = async (url, options = {}) => {
+  const response = await fetch(url, {
+    ...options,
+    headers: options.body ? { "Content-Type": "application/json", ...options.headers } : options.headers,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "The request could not be completed.");
+  return data;
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+const monthNow = () => today().slice(0, 7);
+const formatDate = (value) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString() : "-";
+const sections = ["Dashboard", "Inventory", "Issue / return", "RFID", "History", "Notices", "Reports"];
 
 function StoreKeeperDashboard() {
   const navigate = useNavigate();
-
-  const [activeTab, setActiveTab] = useState("Dashboard");
-  const [darkMode, setDarkMode] = useState(true);
-  const [equipment, setEquipment] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("storeEquipment")) || initialEquipment;
-    } catch {
-      return initialEquipment;
-    }
+  const [storekeeper] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("storekeeper") || "null"); } catch { return null; }
   });
-  const [history, setHistory] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [categories, setCategories] = useState(["Football", "Netball", "Cricket", "Volleyball"]);
-  const [search, setSearch] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [scanValue, setScanValue] = useState("");
-  const [notice, setNotice] = useState("Please return borrowed equipment on time.");
-  const [newItem, setNewItem] = useState({ name: "", category: "", quantity: "" });
-  const [newCategory, setNewCategory] = useState("");
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
+  const [section, setSection] = useState("Dashboard");
+  const [categories, setCategories] = useState([]);
+  const [equipment, setEquipment] = useState([]);
+  const [loans, setLoans] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [report, setReport] = useState([]);
+  const [reportMonth, setReportMonth] = useState(monthNow());
+  const [refresh, setRefresh] = useState(0);
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [equipmentForm, setEquipmentForm] = useState({ categoryId: "", itemCode: "", name: "" });
+  const [editItem, setEditItem] = useState(null);
+  const [studentQuery, setStudentQuery] = useState("");
+  const [studentMatches, setStudentMatches] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [equipmentSearch, setEquipmentSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [cart, setCart] = useState([]);
+  const [dueAt, setDueAt] = useState(today());
+  const [scanValue, setScanValue] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [rfidStudentId, setRfidStudentId] = useState("");
+  const [rfidEquipmentId, setRfidEquipmentId] = useState("");
+  const [rfidTag, setRfidTag] = useState("");
+  const [serialSupported] = useState(() => typeof navigator !== "undefined" && "serial" in navigator);
+  const [scannerStatus, setScannerStatus] = useState("Disconnected");
+  const [scannerBaudRate, setScannerBaudRate] = useState("9600");
+  const scannerRef = useRef(null);
 
-  const saveEquipment = (data) => {
-    setEquipment(data);
-    localStorage.setItem("storeEquipment", JSON.stringify(data));
+  const activeLoans = loans.filter((loan) => !loan.returnedAt);
+  const overdueLoans = activeLoans.filter((loan) => loan.dueAt && loan.dueAt.slice(0, 10) < today());
+  const availableEquipment = useMemo(() => equipment.filter((item) => item.status === "available"
+    && (categoryFilter === "all" || item.categoryId === Number(categoryFilter))
+    && `${item.name} ${item.itemCode} ${item.category}`.toLowerCase().includes(equipmentSearch.trim().toLowerCase())),
+  [categoryFilter, equipment, equipmentSearch]);
+
+  useEffect(() => {
+    document.body.classList.toggle("dark-mode", darkMode);
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  useEffect(() => () => {
+    const activeReader = scannerRef.current?.reader;
+    if (activeReader) void activeReader.cancel().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!storekeeper) {
+      navigate("/login", { replace: true, state: { userType: "Store Keeper" } });
+      return undefined;
+    }
+    let current = true;
+    Promise.all([
+      api("/api/storekeeper/categories"),
+      api("/api/storekeeper/equipment"),
+      api("/api/storekeeper/equipment-loans"),
+      api("/api/storekeeper/notices"),
+    ]).then(([categoryData, equipmentData, loanData, noticeData]) => {
+      if (!current) return;
+      setCategories(categoryData.categories || []);
+      setEquipment(equipmentData.equipment || []);
+      setLoans(loanData.loans || []);
+      setNotices(noticeData.notices || []);
+      setError("");
+    }).catch((loadError) => {
+      if (current) setError(loadError.message);
+    }).finally(() => {
+      if (current) setLoading(false);
+    });
+    return () => { current = false; };
+  }, [navigate, refresh, storekeeper]);
+
+  useEffect(() => {
+    if (section !== "Reports") return;
+    api(`/api/storekeeper/reports/monthly?month=${encodeURIComponent(reportMonth)}`)
+      .then((data) => setReport(data.loans || []))
+      .catch((reportError) => setError(reportError.message));
+  }, [refresh, reportMonth, section]);
+
+  const runAction = async (action) => {
+    setError("");
+    setMessage("");
+    setBusy(true);
+    try {
+      await action();
+      setRefresh((value) => value + 1);
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const totalItems = equipment.reduce((sum, item) => sum + item.quantity, 0);
-  const availableItems = equipment.reduce((sum, item) => sum + item.available, 0);
-  const damagedItems = equipment.filter((item) => item.status === "Damaged").length;
-
-  const addEquipment = (e) => {
-    e.preventDefault();
-    if (!newItem.name || !newItem.category || Number(newItem.quantity) <= 0) {
-      setMessage("Please enter valid equipment details.");
-      return;
-    }
-
-    const item = {
-      id: `EQ${Date.now()}`,
-      name: newItem.name,
-      category: newItem.category,
-      quantity: Number(newItem.quantity),
-      available: Number(newItem.quantity),
-      status: "Available",
-      rfid: "Not assigned",
-    };
-
-    saveEquipment([...equipment, item]);
-    setNewItem({ name: "", category: "", quantity: "" });
-    setMessage("Equipment added successfully.");
+  const searchStudents = async (event) => {
+    event.preventDefault();
+    if (!studentQuery.trim()) return;
+    try {
+      const data = await api(`/api/storekeeper/students?regNo=${encodeURIComponent(studentQuery.trim())}`);
+      setStudentMatches(data.students || []);
+      if (!data.students?.length) setMessage("No matching student found.");
+    } catch (searchError) { setError(searchError.message); }
   };
 
-  const addCategory = (e) => {
-    e.preventDefault();
-    if (!newCategory.trim()) return;
-    if (categories.includes(newCategory.trim())) {
-      setMessage("Category already exists.");
-      return;
-    }
-    setCategories([...categories, newCategory.trim()]);
-    setNewCategory("");
-    setMessage("Category added successfully.");
+  const addCategory = (event) => {
+    event.preventDefault();
+    runAction(async () => {
+      await api("/api/storekeeper/categories", { method: "POST", body: JSON.stringify({ name: categoryName }) });
+      setCategoryName("");
+      setMessage("Equipment category added.");
+    });
   };
 
-  const addToCart = (item) => {
-    if (item.available <= 0) {
-      setMessage("This equipment is not available.");
-      return;
-    }
-    if (cart.some((entry) => entry.id === item.id)) {
-      setMessage("This item is already in the issue cart.");
-      return;
-    }
-    setCart([...cart, item]);
-    setMessage(`${item.name} added to issue cart.`);
+  const saveEquipment = (event) => {
+    event.preventDefault();
+    runAction(async () => {
+      await api("/api/storekeeper/equipment", { method: "POST", body: JSON.stringify({ ...equipmentForm, categoryId: Number(equipmentForm.categoryId) }) });
+      setEquipmentForm({ categoryId: "", itemCode: "", name: "" });
+      setMessage("Equipment item added.");
+    });
   };
 
-  const removeFromCart = (id) => {
-    setCart(cart.filter((item) => item.id !== id));
+  const saveEdit = (event) => {
+    event.preventDefault();
+    runAction(async () => {
+      await api(`/api/storekeeper/equipment/${editItem.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ itemCode: editItem.itemCode, name: editItem.name, categoryId: Number(editItem.categoryId) }),
+      });
+      setEditItem(null);
+      setMessage("Equipment details updated.");
+    });
   };
 
   const confirmIssue = () => {
-    if (!studentId.trim() || cart.length === 0) {
-      setMessage("Enter a student ID and add equipment to the cart.");
+    if (!selectedStudent || !cart.length || !dueAt) {
+      setError("Select a student, at least one equipment item, and a due date.");
       return;
     }
-
-    const updated = equipment.map((item) =>
-      cart.some((entry) => entry.id === item.id)
-        ? { ...item, available: item.available - 1 }
-        : item
-    );
-
-    saveEquipment(updated);
-    setHistory([
-      ...cart.map((item) => ({
-        id: Date.now() + Math.random(),
-        student: studentId,
-        equipment: item.name,
-        equipmentId: item.id,
-        action: "Issued",
-        date: new Date().toLocaleString(),
-      })),
-      ...history,
-    ]);
-
-    setCart([]);
-    setStudentId("");
-    setMessage("Equipment issued successfully.");
+    runAction(async () => {
+      await api("/api/storekeeper/equipment-loans/issue", {
+        method: "POST",
+        body: JSON.stringify({ regNo: selectedStudent.regNo, equipmentIds: cart.map((item) => item.id), dueAt }),
+      });
+      setCart([]);
+      setSelectedStudent(null);
+      setStudentQuery("");
+      setMessage("Equipment issued successfully.");
+    });
   };
 
-  const returnEquipment = (record) => {
-    const updated = equipment.map((item) =>
-      item.id === record.equipmentId
-        ? { ...item, available: Math.min(item.quantity, item.available + 1) }
-        : item
-    );
-
-    saveEquipment(updated);
-    setHistory(history.map((entry) =>
-      entry.id === record.id ? { ...entry, action: "Returned" } : entry
-    ));
+  const markReturned = (loanId) => runAction(async () => {
+    await api(`/api/storekeeper/equipment-loans/${loanId}/return`, { method: "POST" });
     setMessage("Equipment return recorded.");
-  };
+  });
 
-  const assignRFID = (id, tag) => {
-    if (!tag.trim()) return;
-    saveEquipment(equipment.map((item) =>
-      item.id === id ? { ...item, rfid: tag.trim() } : item
-    ));
-    setMessage("RFID tag assigned successfully.");
-  };
-
-  const updateStatus = (id, status) => {
-    saveEquipment(equipment.map((item) =>
-      item.id === id ? { ...item, status } : item
-    ));
-    setMessage("Equipment status updated.");
-  };
-
-  const handleScan = (e) => {
-    e.preventDefault();
-    const found = equipment.find((item) =>
-      item.id.toLowerCase() === scanValue.toLowerCase() ||
-      item.rfid.toLowerCase() === scanValue.toLowerCase()
-    );
-    setMessage(found
-      ? `Equipment found: ${found.name} | ID: ${found.id} | Available: ${found.available}`
-      : "No matching equipment found.");
+  const processScannedTag = async (tag) => {
+    const data = await api(`/api/storekeeper/scan/${encodeURIComponent(tag)}`);
+    setScanResult(data);
+    if (data.type === "student") {
+      setSelectedStudent(data.student);
+      setStudentQuery(data.student.regNo);
+      setRfidStudentId(String(data.student.id));
+    } else if (data.type === "equipment" && data.equipment.status === "available") {
+      setCart((current) => current.some((item) => item.id === data.equipment.id) ? current : [...current, data.equipment]);
+    } else if (data.type === "equipment") {
+      setMessage(`Equipment is ${data.equipment.status} and cannot be added to the issue cart.`);
+    }
     setScanValue("");
   };
 
-  const downloadReport = () => {
-    const rows = [
-      ["Equipment ID", "Name", "Category", "Quantity", "Available", "Status"],
-      ...equipment.map((item) => [
-        item.id, item.name, item.category, item.quantity, item.available, item.status
-      ]),
-    ];
-    const csv = rows.map((row) =>
-      row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
-    ).join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "StoreKeeper-Equipment-Report.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleScan = (event) => {
+    event.preventDefault();
+    const tag = scanValue.trim();
+    if (tag) runAction(() => processScannedTag(tag));
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/logout", { method: "POST" });
-    } catch {
-      // Continue with local logout if the server is unavailable.
+  const connectSerialScanner = async () => {
+    if (!serialSupported) {
+      setError("This browser does not support Web Serial. Use a keyboard-emulation USB scanner instead.");
+      return;
     }
+    setError("");
+    let port;
+    let reader;
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: Number(scannerBaudRate) });
+      reader = port.readable.getReader();
+      scannerRef.current = { port, reader };
+      setScannerStatus("Connected");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const values = buffer.split(/\r\n|\n|\r/);
+        buffer = values.pop() || "";
+        for (const valueText of values) {
+          if (valueText.trim()) await runAction(() => processScannedTag(valueText.trim()));
+        }
+      }
+      if (buffer.trim()) await runAction(() => processScannedTag(buffer.trim()));
+    } catch (scannerError) {
+      if (scannerError.name !== "AbortError") setError(scannerError.message || "Unable to read from the USB scanner.");
+    } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch { /* The reader may already be released. */ }
+      }
+      if (port) {
+        try { await port.close(); } catch { /* The device may already be disconnected. */ }
+      }
+      scannerRef.current = null;
+      setScannerStatus("Disconnected");
+    }
+  };
+
+  const disconnectSerialScanner = async () => {
+    try { await scannerRef.current?.reader.cancel(); } catch { /* The port may already be closed. */ }
+  };
+
+  const assignTag = (event) => {
+    event.preventDefault();
+    if (!rfidTag.trim()) return;
+    runAction(async () => {
+      if (rfidStudentId) {
+        await api(`/api/storekeeper/students/${rfidStudentId}/rfid`, { method: "POST", body: JSON.stringify({ tag: rfidTag }) });
+      } else if (rfidEquipmentId) {
+        await api(`/api/storekeeper/equipment/${rfidEquipmentId}/rfid`, { method: "POST", body: JSON.stringify({ tag: rfidTag }) });
+      } else {
+        throw new Error("Select a student or equipment item to assign this tag.");
+      }
+      setRfidTag("");
+      setMessage("RFID tag assigned.");
+    });
+  };
+
+  const updateStatus = (itemId, status) => runAction(async () => {
+    await api(`/api/storekeeper/equipment/${itemId}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    setMessage(`Equipment marked ${status}.`);
+  });
+
+  const logout = async () => {
+    try { await api("/api/logout", { method: "POST" }); } catch { /* Clear the local role even if the server is unavailable. */ }
     localStorage.removeItem("storekeeper");
+    localStorage.removeItem("student");
+    localStorage.removeItem("staff");
     navigate("/login", { replace: true, state: { userType: "Store Keeper" } });
   };
 
-  const tabs = [
-    "Dashboard",
-    "Equipment",
-    "Categories",
-    "Issue Equipment",
-    "RFID Scanner",
-    "History",
-    "Reports",
-    "Notices",
-  ];
+  const downloadReport = () => {
+    const file = new Blob([buildMonthlyReportPdf(reportMonth, report)], { type: "application/pdf" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `equipment-report-${reportMonth}.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
-  const filteredEquipment = equipment.filter((item) =>
-    `${item.id} ${item.name} ${item.category}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+  const printReport = () => window.print();
+  const shareReport = async () => {
+    const reportText = [
+      `Equipment management report · ${reportMonth}`,
+      "Student,University ID,Equipment,Issued,Due,Returned",
+      ...report.map((loan) => [loan.studentName, loan.regNo, loan.itemName, loan.borrowedAt, loan.dueAt || "", loan.returnedAt || ""].join(",")),
+    ].join("\n");
+    try {
+      if (navigator.share) await navigator.share({ title: "Monthly equipment report", text: reportText });
+      else {
+        await navigator.clipboard.writeText(reportText);
+        setMessage("Monthly report copied to clipboard.");
+      }
+    } catch (shareError) {
+      if (shareError.name !== "AbortError") setError("Unable to share this report.");
+    }
+  };
+
+  const selectStudent = (student) => {
+    setSelectedStudent(student);
+    setStudentQuery(student.regNo);
+    setStudentMatches([]);
+  };
+
+  const nav = (name) => <button key={name} type="button" className={section === name ? "is-active" : ""} onClick={() => { setSection(name); setError(""); setMessage(""); }}>
+    <span aria-hidden="true">{({ Dashboard: "▦", Inventory: "▤", "Issue / return": "↔", RFID: "⌁", History: "◷", Notices: "♧", Reports: "▧" })[name]}</span>{name}
+  </button>;
+  const serialScannerControls = <div className="store-dashboard-serial-controls">
+    {serialSupported ? <>
+      {scannerStatus === "Disconnected" && <label>Serial speed<select aria-label="USB scanner serial speed" value={scannerBaudRate} onChange={(event) => setScannerBaudRate(event.target.value)}><option value="9600">9600 baud</option><option value="19200">19200 baud</option><option value="38400">38400 baud</option><option value="57600">57600 baud</option><option value="115200">115200 baud</option></select></label>}
+      <button className="store-dashboard-secondary" type="button" onClick={scannerStatus === "Connected" ? disconnectSerialScanner : connectSerialScanner}>
+        {scannerStatus === "Connected" ? "Disconnect USB scanner" : "Connect USB serial scanner"}
+      </button>
+      <span className={scannerStatus === "Connected" ? "is-connected" : ""}>{scannerStatus}</span>
+    </> : <span>Web Serial is unavailable in this browser; keyboard-emulation scanners still work.</span>}
+  </div>;
 
   return (
-    <div className={`sk-app ${darkMode ? "sk-dark" : "sk-light"}`}>
-      <aside className="sk-sidebar">
-        <div className="sk-brand">
-          <div className="sk-logo">U</div>
-          <div>
-            <h2>UniXSport</h2>
-            <span>STORE MANAGEMENT</span>
-          </div>
-        </div>
-
-        <div className="sk-profile">
-          <div className="sk-avatar">SK</div>
-          <div>
-            <strong>Store Keeper</strong>
-            <small>Administrator</small>
-          </div>
-        </div>
-
-        <p className="sk-menu-title">MAIN MENU</p>
-        <nav className="sk-nav">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className={activeTab === tab ? "active" : ""}
-              onClick={() => setActiveTab(tab)}
-            >
-              <span>{{
-                Dashboard: "▦",
-                Equipment: "⚽",
-                Categories: "▤",
-                "Issue Equipment": "↗",
-                "RFID Scanner": "▣",
-                History: "◷",
-                Reports: "▥",
-                Notices: "♢",
-              }[tab]}</span>
-              {tab}
-            </button>
-          ))}
-        </nav>
-
-        <div className="sk-sidebar-bottom">
-          <button onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? "☀ Light Mode" : "☾ Dark Mode"}
-          </button>
-          <button className="sk-logout" onClick={handleLogout}>↪ Logout</button>
-        </div>
+    <main className={`store-dashboard${darkMode ? " is-dark" : ""}`}>
+      <aside className="store-dashboard-sidebar">
+        <div className="store-dashboard-brand">Uni<span>X</span>Sport</div>
+        <p className="store-dashboard-label">STORE WORKSPACE</p>
+        <nav aria-label="Store Keeper navigation">{sections.map(nav)}</nav>
+        <div className="store-dashboard-account"><span>SK</span><div><strong>Store Keeper</strong><small>{storekeeper?.email}</small></div></div>
+        <button className="store-dashboard-logout" type="button" onClick={logout}>↪ <span>Log out</span></button>
       </aside>
 
-      <main className="sk-main">
-        <header className="sk-topbar">
-          <div>
-            <small>UniXSport / Store Keeper</small>
-            <h1>{activeTab}</h1>
-          </div>
-          <div className="sk-top-actions">
-            <span className="sk-status-dot" /> System Dashboard
+      <section className="store-dashboard-main">
+        <header className="store-dashboard-header">
+          <div>Store operations <span>/</span> {section}</div>
+          <div className="store-dashboard-header-actions">
+            <div className="store-dashboard-notice-wrap">
+              <button className="store-dashboard-icon" type="button" aria-label="Notifications" title="Notifications" aria-expanded={showNotifications} onClick={() => setShowNotifications((value) => !value)}>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+                {(notices.length + overdueLoans.length) > 0 && <i />}
+              </button>
+              {showNotifications && <div className="store-dashboard-popover"><strong>Notifications</strong><p>{overdueLoans.length} overdue equipment returns</p><p>{notices.length} notices and announcements</p></div>}
+            </div>
+            <button className="store-dashboard-icon" type="button" aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"} title={darkMode ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDarkMode((value) => !value)}>
+              {darkMode ? <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z" /></svg>}
+            </button>
           </div>
         </header>
 
-        {message && (
-          <div className="sk-message">
-            {message}
-            <button onClick={() => setMessage("")}>×</button>
-          </div>
-        )}
+        <div className="store-dashboard-content">
+          {error && <p className="store-dashboard-alert" role="alert">{error}</p>}
+          {message && <p className="store-dashboard-success" role="status">{message}</p>}
 
-        {activeTab === "Dashboard" && (
-          <>
-            <section className="sk-welcome">
-              <div>
-                <span>STORE MANAGEMENT SYSTEM</span>
-                <h2>Welcome back, Store Keeper!</h2>
-                <p>Manage sports equipment, borrowing and returns from one place.</p>
-              </div>
-              <div className="sk-welcome-icon">🏆</div>
+          {section === "Dashboard" && <>
+            <div className="store-dashboard-title"><div><p>TODAY, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }).toUpperCase()}</p><h1>Equipment dashboard</h1><span>Monitor inventory, borrowing activity, and returns.</span></div><button type="button" className="store-dashboard-primary" onClick={() => setSection("Issue / return")}>Issue equipment</button></div>
+            <div className="store-dashboard-metrics"><article><span>Available items</span><strong>{equipment.filter((item) => item.status === "available").length}</strong></article><article><span>Currently borrowed</span><strong>{activeLoans.length}</strong></article><article><span>Overdue returns</span><strong>{overdueLoans.length}</strong></article><article><span>Categories</span><strong>{categories.length}</strong></article></div>
+            <section className="store-dashboard-panel"><div className="store-dashboard-panel-heading"><div><h2>Recent borrowing</h2><p>Latest equipment issue and return activity.</p></div><button type="button" onClick={() => setSection("History")}>Full history</button></div>
+              <LoanTable loans={loans.slice(0, 8)} busy={busy} onReturn={markReturned} />
             </section>
+          </>}
 
-            <section className="sk-stat-grid">
-              <div className="sk-stat-card">
-                <span>Total Equipment</span>
-                <strong>{totalItems}</strong>
-                <small>Units registered</small>
-              </div>
-              <div className="sk-stat-card">
-                <span>Available Equipment</span>
-                <strong>{availableItems}</strong>
-                <small>Ready for issue</small>
-              </div>
-              <div className="sk-stat-card">
-                <span>Categories</span>
-                <strong>{categories.length}</strong>
-                <small>Equipment categories</small>
-              </div>
-              <div className="sk-stat-card">
-                <span>Damaged Equipment</span>
-                <strong>{damagedItems}</strong>
-                <small>Needs attention</small>
-              </div>
-            </section>
-
-            <section className="sk-panel">
-              <div className="sk-panel-heading">
-                <h3>Equipment Overview</h3>
-                <button onClick={() => setActiveTab("Equipment")}>View all →</button>
-              </div>
-              <EquipmentTable
-                items={equipment.slice(0, 5)}
-                updateStatus={updateStatus}
-              />
-            </section>
-
-            <section className="sk-panel">
-              <h3>University Sports Events</h3>
-              <p>University sports event information will appear here when connected to the university events system.</p>
-            </section>
-          </>
-        )}
-
-        {activeTab === "Equipment" && (
-          <>
-            <section className="sk-panel">
-              <h3>Add New Equipment</h3>
-              <form className="sk-form" onSubmit={addEquipment}>
-                <input
-                  placeholder="Equipment name"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  required
-                />
-                <select
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  required
-                >
-                  <option value="">Select category</option>
-                  {categories.map((cat) => <option key={cat}>{cat}</option>)}
-                </select>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Quantity"
-                  value={newItem.quantity}
-                  onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                  required
-                />
-                <button type="submit">+ Add Equipment</button>
-              </form>
-            </section>
-
-            <section className="sk-panel">
-              <div className="sk-panel-heading">
-                <h3>Equipment Inventory</h3>
-                <input
-                  className="sk-search"
-                  placeholder="Search by ID or name..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <EquipmentTable items={filteredEquipment} updateStatus={updateStatus} />
-            </section>
-          </>
-        )}
-
-        {activeTab === "Categories" && (
-          <section className="sk-panel">
-            <h3>Equipment Categories</h3>
-            <form className="sk-form" onSubmit={addCategory}>
-              <input
-                placeholder="New category name"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                required
-              />
-              <button type="submit">+ Add Category</button>
-            </form>
-            <div className="sk-category-grid">
-              {categories.map((cat) => (
-                <div className="sk-category-card" key={cat}>
-                  <span>⚽</span>
-                  <strong>{cat}</strong>
-                  <small>{equipment.filter((item) => item.category === cat).length} equipment types</small>
-                </div>
-              ))}
+          {section === "Inventory" && <>
+            <PageTitle title="Equipment inventory" detail="Manage equipment categories, individual items, and condition." />
+            <div className="store-dashboard-forms">
+              <form className="store-dashboard-panel store-dashboard-form" onSubmit={addCategory}><h2>Add category</h2><label>Category name<input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required maxLength={80} placeholder="e.g. Rackets" /></label><button className="store-dashboard-primary" disabled={busy}>Add category</button></form>
+              <form className="store-dashboard-panel store-dashboard-form" onSubmit={saveEquipment}><h2>Add equipment</h2><label>Category<select value={equipmentForm.categoryId} onChange={(event) => setEquipmentForm({ ...equipmentForm, categoryId: event.target.value })} required><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Equipment ID<input value={equipmentForm.itemCode} onChange={(event) => setEquipmentForm({ ...equipmentForm, itemCode: event.target.value })} required maxLength={50} /></label><label>Equipment name<input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} required maxLength={120} /></label><button className="store-dashboard-primary" disabled={busy}>Add item</button></form>
             </div>
-          </section>
-        )}
-
-        {activeTab === "Issue Equipment" && (
-          <>
-            <section className="sk-panel">
-              <h3>Issue Equipment</h3>
-              <label className="sk-label">Student University ID</label>
-              <input
-                className="sk-input"
-                placeholder="Enter student registration number"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-              />
-              <h3 className="sk-subheading">Select Equipment</h3>
-              <div className="sk-equipment-grid">
-                {equipment.map((item) => (
-                  <div className="sk-item-card" key={item.id}>
-                    <strong>{item.name}</strong>
-                    <small>{item.category} · {item.id}</small>
-                    <span>{item.available} available</span>
-                    <button disabled={item.available <= 0} onClick={() => addToCart(item)}>
-                      Add to cart
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <section className="store-dashboard-panel"><div className="store-dashboard-panel-heading"><div><h2>Equipment</h2><p>{categories.map((category) => `${category.name} (${category.itemCount})`).join(" · ") || "Add a category to start the inventory."}</p></div><input aria-label="Search equipment" placeholder="Search ID or name" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} /></div>
+              <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>ID</th><th>Equipment</th><th>Category</th><th>RFID</th><th>Status</th><th>Actions</th></tr></thead><tbody>{equipment.filter((item) => `${item.itemCode} ${item.name} ${item.category}`.toLowerCase().includes(equipmentSearch.toLowerCase())).map((item) => <tr key={item.id}><td>{item.itemCode}</td><td>{item.name}</td><td>{item.category}</td><td>{item.rfidTag || "Not assigned"}</td><td><Status status={item.status} /></td><td className="store-dashboard-actions"><button type="button" onClick={() => setEditItem({ id: item.id, itemCode: item.itemCode, name: item.name, categoryId: item.categoryId })}>Edit</button>{item.status !== "borrowed" && item.status !== "removed" && <button type="button" onClick={() => updateStatus(item.id, item.status === "damaged" ? "available" : "damaged")}>{item.status === "damaged" ? "Mark repaired" : "Mark damaged"}</button>}</td></tr>)}</tbody></table></div>
             </section>
+          </>}
 
-            <section className="sk-panel">
-              <h3>Issue Cart ({cart.length})</h3>
-              {cart.length === 0 && <p>No equipment selected.</p>}
-              {cart.map((item) => (
-                <div className="sk-cart-row" key={item.id}>
-                  <span>{item.name}</span>
-                  <button onClick={() => removeFromCart(item.id)}>Remove</button>
-                </div>
-              ))}
-              <button className="sk-primary" onClick={confirmIssue} disabled={!cart.length}>
-                Confirm Issue
-              </button>
-            </section>
-          </>
-        )}
+          {section === "Issue / return" && <>
+            <PageTitle title="Issue equipment" detail="Find a student, add equipment to the cart, and confirm the issue." />
+            <section className="store-dashboard-panel store-dashboard-scan"><form onSubmit={handleScan}><label>Scan RFID or USB barcode<input autoComplete="off" value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Focus here, scan tag, then press Enter" /></label><button className="store-dashboard-secondary" disabled={busy}>Scan RFID</button></form><small>Keyboard scanners can type into the field. Serial readers should send each tag followed by a line break.</small>{serialScannerControls}{scanResult && <p role="status">{scanResult.type === "student" ? `Student: ${scanResult.student.fullName} · ${scanResult.student.regNo}` : `Equipment: ${scanResult.equipment.name} · ${scanResult.equipment.itemCode} · ${scanResult.equipment.status}`}</p>}</section>
+            <div className="store-dashboard-issue-layout"><section className="store-dashboard-panel"><h2>Student</h2><form className="store-dashboard-search-form" onSubmit={searchStudents}><input aria-label="University ID" value={studentQuery} onChange={(event) => { setStudentQuery(event.target.value); setSelectedStudent(null); }} placeholder="University identification number" /><button className="store-dashboard-secondary">Search student</button></form>{studentMatches.map((student) => <button className="store-dashboard-result" key={student.id} type="button" onClick={() => selectStudent(student)}><strong>{student.fullName}</strong><span>{student.regNo} · {student.faculty}</span></button>)}{selectedStudent && <p className="store-dashboard-selected">Selected: <strong>{selectedStudent.fullName}</strong> · {selectedStudent.regNo}</p>}
+              <h2 className="store-dashboard-subheading">Available equipment</h2><div className="store-dashboard-filter-row"><select aria-label="Equipment category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><input aria-label="Find equipment" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="Search ID or name" /></div><div className="store-dashboard-available-list">{availableEquipment.map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.itemCode} · {item.category}</small></span><button type="button" disabled={cart.some((cartItem) => cartItem.id === item.id)} onClick={() => setCart((current) => [...current, item])}>{cart.some((cartItem) => cartItem.id === item.id) ? "Added" : "Add"}</button></div>)}{!availableEquipment.length && <p>No available equipment found.</p>}</div>
+            </section><section className="store-dashboard-panel store-dashboard-cart"><h2>Issue cart <span>{cart.length}</span></h2>{cart.map((item) => <div className="store-dashboard-cart-item" key={item.id}><span><strong>{item.name}</strong><small>{item.itemCode}</small></span><button type="button" aria-label={`Remove ${item.name} from cart`} onClick={() => setCart((current) => current.filter((entry) => entry.id !== item.id))}>Remove</button></div>)}{!cart.length && <p className="store-dashboard-empty">Equipment added for this transaction appears here.</p>}<label>Return due date<input type="date" min={today()} value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><button className="store-dashboard-primary store-dashboard-confirm" type="button" disabled={busy || !cart.length || !selectedStudent} onClick={confirmIssue}>Confirm issue</button></section></div>
+          </>}
 
-        {activeTab === "RFID Scanner" && (
-          <section className="sk-panel">
-            <h3>RFID / USB Scanner</h3>
-            <p>Connect a compatible USB scanner and scan an equipment RFID tag or equipment ID into the field below.</p>
-            <form className="sk-form" onSubmit={handleScan}>
-              <input
-                placeholder="Scan or enter RFID / Equipment ID"
-                value={scanValue}
-                onChange={(e) => setScanValue(e.target.value)}
-                autoFocus
-              />
-              <button type="submit">Search Scan</button>
-            </form>
-            <div className="sk-info-note">
-              Note: This screen accepts keyboard input from compatible USB scanners. Direct RFID hardware integration requires device and backend configuration.
-            </div>
-            <h3 className="sk-subheading">Assign RFID Tags</h3>
-            {equipment.map((item) => (
-              <div className="sk-cart-row" key={item.id}>
-                <span>{item.name} ({item.id}) · {item.rfid}</span>
-                <button onClick={() => {
-                  const tag = window.prompt("Enter RFID tag number:");
-                  if (tag) assignRFID(item.id, tag);
-                }}>Assign Tag</button>
-              </div>
-            ))}
-          </section>
-        )}
+          {section === "RFID" && <>
+            <PageTitle title="RFID assignments" detail="Assign tags to student accounts or equipment cards, and resolve scans." />
+            <section className="store-dashboard-panel store-dashboard-form store-dashboard-rfid"><h2>Assign an RFID tag</h2><form onSubmit={searchStudents}><label>Find student by university ID<input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="University identification number" /></label><button className="store-dashboard-secondary">Search</button></form>{studentMatches.map((student) => <button className="store-dashboard-result" key={student.id} type="button" onClick={() => { setRfidStudentId(String(student.id)); setRfidEquipmentId(""); selectStudent(student); }}>{student.fullName} · {student.regNo}</button>)}<label>Equipment item<select value={rfidEquipmentId} onChange={(event) => { setRfidEquipmentId(event.target.value); setRfidStudentId(""); }}><option value="">Select equipment instead</option>{equipment.map((item) => <option key={item.id} value={item.id}>{item.itemCode} · {item.name}</option>)}</select></label><form onSubmit={assignTag}><label>RFID tag value<input value={rfidTag} onChange={(event) => setRfidTag(event.target.value)} required placeholder="Scan tag or enter its value" /></label><button className="store-dashboard-primary" disabled={busy}>Assign tag</button></form><p className="store-dashboard-hint">Compatible USB RFID readers that emulate keyboard input can enter the tag value above. Direct reader protocols need device-specific integration.</p></section>
+            <section className="store-dashboard-panel store-dashboard-scan"><form onSubmit={handleScan}><label>Scan and identify a tag<input value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Scan an assigned student or equipment tag" /></label><button className="store-dashboard-secondary" disabled={busy}>Scan RFID</button></form>{serialScannerControls}{scanResult && <pre>{JSON.stringify(scanResult, null, 2)}</pre>}</section>
+          </>}
 
-        {activeTab === "History" && (
-          <section className="sk-panel">
-            <h3>Borrowing & Returning History</h3>
-            <div className="sk-table-wrap">
-              <table className="sk-table">
-                <thead>
-                  <tr>
-                    <th>Student ID</th>
-                    <th>Equipment</th>
-                    <th>Action</th>
-                    <th>Date</th>
-                    <th>Return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.length === 0 ? (
-                    <tr><td colSpan="5">No transactions recorded in this session.</td></tr>
-                  ) : history.map((record) => (
-                    <tr key={record.id}>
-                      <td>{record.student}</td>
-                      <td>{record.equipment}</td>
-                      <td>{record.action}</td>
-                      <td>{record.date}</td>
-                      <td>
-                        {record.action === "Issued" ? (
-                          <button onClick={() => returnEquipment(record)}>Mark Returned</button>
-                        ) : "Complete"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+          {section === "History" && <><PageTitle title="Equipment history" detail="Borrowing and return records for all students." /><section className="store-dashboard-panel"><LoanTable loans={loans} busy={busy} onReturn={markReturned} /></section></>}
 
-        {activeTab === "Reports" && (
-          <section className="sk-panel">
-            <h3>Equipment Management Reports</h3>
-            <p>Generate an inventory report using the current equipment records.</p>
-            <div className="sk-report-summary">
-              <div><span>Total items</span><strong>{totalItems}</strong></div>
-              <div><span>Available</span><strong>{availableItems}</strong></div>
-              <div><span>Damaged</span><strong>{damagedItems}</strong></div>
-            </div>
-            <button className="sk-primary" onClick={downloadReport}>Download Inventory CSV</button>
-            <button className="sk-secondary" onClick={() => window.print()}>Print Report</button>
-            <p className="sk-info-note">PDF generation and monthly report scheduling require backend integration.</p>
-          </section>
-        )}
+          {section === "Notices" && <><PageTitle title="Notices and announcements" detail="Updates published by the Gym Coach and Administrator." /><div className="store-dashboard-notices">{notices.map((notice) => <article className="store-dashboard-panel" key={notice.id}><div><span>{notice.senderRole}</span><time>{formatDate(notice.sentAt)}</time></div><h2>{notice.title}</h2><p>{notice.message}</p></article>)}{!notices.length && <p className="store-dashboard-empty">No notices have been published yet.</p>}</div></>}
 
-        {activeTab === "Notices" && (
-          <section className="sk-panel">
-            <h3>Coach & Admin Notices</h3>
-            <div className="sk-notice">
-              <span>📢</span>
-              <div>
-                <strong>Store Notice</strong>
-                <p>{notice}</p>
-              </div>
-            </div>
-            <p className="sk-info-note">Live notices will appear here after connecting the university notice system.</p>
-          </section>
-        )}
+          {section === "Reports" && <><PageTitle title="Monthly equipment report" detail="Download, print, or share a monthly equipment report." /><section className="store-dashboard-panel store-dashboard-report-controls"><label>Report month<input type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label><div><button className="store-dashboard-primary" type="button" onClick={downloadReport}>Download PDF</button><button className="store-dashboard-secondary" type="button" onClick={printReport}>Print report</button><button className="store-dashboard-secondary" type="button" onClick={shareReport}>Share report</button></div></section><section className="store-dashboard-panel store-dashboard-print-area"><h2>Equipment management report · {reportMonth}</h2><p>{report.length} equipment loans · {report.filter((loan) => loan.returnedAt).length} returned · {report.filter((loan) => !loan.returnedAt).length} outstanding</p><LoanTable loans={report} busy={busy} onReturn={markReturned} report /></section></>}
+        </div>
+      </section>
 
-        <footer className="sk-footer">
-          UniXSport Store Management System · Store Keeper Portal
-        </footer>
-      </main>
-    </div>
+      {editItem && <div className="store-dashboard-modal-backdrop" role="presentation"><form className="store-dashboard-modal" onSubmit={saveEdit}><h2>Edit equipment</h2><label>Equipment ID<input value={editItem.itemCode} onChange={(event) => setEditItem({ ...editItem, itemCode: event.target.value })} required /></label><label>Equipment name<input value={editItem.name} onChange={(event) => setEditItem({ ...editItem, name: event.target.value })} required /></label><label>Category<select value={editItem.categoryId} onChange={(event) => setEditItem({ ...editItem, categoryId: event.target.value })}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><div><button className="store-dashboard-secondary" type="button" onClick={() => setEditItem(null)}>Cancel</button><button className="store-dashboard-primary" disabled={busy}>Save changes</button></div></form></div>}
+      {loading && <div className="store-dashboard-loading" role="status">Loading store data...</div>}
+    </main>
   );
 }
 
-function EquipmentTable({ items, updateStatus }) {
-  return (
-    <div className="sk-table-wrap">
-      <table className="sk-table">
-        <thead>
-          <tr>
-            <th>Equipment ID</th>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Total</th>
-            <th>Available</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.length === 0 ? (
-            <tr><td colSpan="6">No equipment found.</td></tr>
-          ) : items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.id}</td>
-              <td>{item.name}</td>
-              <td>{item.category}</td>
-              <td>{item.quantity}</td>
-              <td>{item.available}</td>
-              <td>
-                <select
-                  value={item.status}
-                  onChange={(e) => updateStatus(item.id, e.target.value)}
-                >
-                  <option>Available</option>
-                  <option>Damaged</option>
-                  <option>Under Maintenance</option>
-                </select>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function PageTitle({ title, detail }) {
+  return <div className="store-dashboard-title"><div><h1>{title}</h1><span>{detail}</span></div></div>;
+}
+
+function Status({ status }) {
+  return <span className={`store-dashboard-status ${status}`}>{status}</span>;
+}
+
+function LoanTable({ loans, busy, onReturn, report = false }) {
+  return <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>Student</th><th>University ID</th><th>Equipment</th><th>Issued</th><th>Due</th><th>Status</th>{!report && <th>Action</th>}</tr></thead><tbody>{loans.map((loan) => <tr key={loan.id}><td>{loan.studentName}</td><td>{loan.regNo}</td><td>{loan.itemName}</td><td>{formatDate(loan.borrowedAt)}</td><td>{formatDate(loan.dueAt)}</td><td><Status status={loan.returnedAt ? "returned" : loan.dueAt && loan.dueAt.slice(0, 10) < today() ? "overdue" : "borrowed"} /></td>{!report && <td>{loan.returnedAt ? "Complete" : <button type="button" disabled={busy} onClick={() => onReturn(loan.id)}>Mark returned</button>}</td>}</tr>)}{!loans.length && <tr><td className="store-dashboard-empty-cell" colSpan={report ? 6 : 7}>No equipment history to show.</td></tr>}</tbody></table></div>;
 }
 
 export default StoreKeeperDashboard;
