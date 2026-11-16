@@ -16,7 +16,7 @@ const api = async (url, options = {}) => {
 const today = () => new Date().toISOString().slice(0, 10);
 const monthNow = () => today().slice(0, 7);
 const formatDate = (value) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString() : "-";
-const sections = ["Dashboard", "Inventory", "Issue / return", "RFID", "History", "Notices", "Reports"];
+const sections = ["Dashboard", "Inventory", "Borrow & return", "RFID", "History", "Notices", "Reports"];
 
 function StoreKeeperDashboard() {
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ function StoreKeeperDashboard() {
   const [busy, setBusy] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [categoryName, setCategoryName] = useState("");
-  const [equipmentForm, setEquipmentForm] = useState({ categoryId: "", itemCode: "", name: "" });
+  const [equipmentForm, setEquipmentForm] = useState({ categoryId: "", name: "", quantity: "1" });
   const [editItem, setEditItem] = useState(null);
   const [studentQuery, setStudentQuery] = useState("");
   const [studentMatches, setStudentMatches] = useState([]);
@@ -63,6 +63,8 @@ function StoreKeeperDashboard() {
     && (categoryFilter === "all" || item.categoryId === Number(categoryFilter))
     && `${item.name} ${item.itemCode} ${item.category}`.toLowerCase().includes(equipmentSearch.trim().toLowerCase())),
   [categoryFilter, equipment, equipmentSearch]);
+  const inventoryEquipment = equipment.filter((item) =>
+    `${item.itemCode} ${item.name} ${item.category}`.toLowerCase().includes(equipmentSearch.trim().toLowerCase()));
 
   useEffect(() => {
     document.body.classList.toggle("dark-mode", darkMode);
@@ -143,9 +145,16 @@ function StoreKeeperDashboard() {
   const saveEquipment = (event) => {
     event.preventDefault();
     runAction(async () => {
-      await api("/api/storekeeper/equipment", { method: "POST", body: JSON.stringify({ ...equipmentForm, categoryId: Number(equipmentForm.categoryId) }) });
-      setEquipmentForm({ categoryId: "", itemCode: "", name: "" });
-      setMessage("Equipment item added.");
+      const data = await api("/api/storekeeper/equipment", {
+        method: "POST",
+        body: JSON.stringify({
+          ...equipmentForm,
+          categoryId: Number(equipmentForm.categoryId),
+          quantity: Number(equipmentForm.quantity),
+        }),
+      });
+      setEquipmentForm({ categoryId: "", name: "", quantity: "1" });
+      setMessage(`${data.count} ${data.count === 1 ? "equipment item" : "equipment items"} added to inventory.`);
     });
   };
 
@@ -174,7 +183,7 @@ function StoreKeeperDashboard() {
       setCart([]);
       setSelectedStudent(null);
       setStudentQuery("");
-      setMessage("Equipment issued successfully.");
+      setMessage("Equipment borrowed successfully.");
     });
   };
 
@@ -270,6 +279,12 @@ function StoreKeeperDashboard() {
     setMessage(`Equipment marked ${status}.`);
   });
 
+  const removeEquipment = (item) => {
+    if (window.confirm(`Remove ${item.name} (${item.itemCode}) from inventory? Its loan history will be kept.`)) {
+      updateStatus(item.id, "removed");
+    }
+  };
+
   const logout = async () => {
     try { await api("/api/logout", { method: "POST" }); } catch { /* Clear the local role even if the server is unavailable. */ }
     localStorage.removeItem("storekeeper");
@@ -294,7 +309,7 @@ function StoreKeeperDashboard() {
   const shareReport = async () => {
     const reportText = [
       `Equipment management report · ${reportMonth}`,
-      "Student,University ID,Equipment,Issued,Due,Returned",
+      "Student,University ID,Equipment,Borrowed,Due,Returned",
       ...report.map((loan) => [loan.studentName, loan.regNo, loan.itemName, loan.borrowedAt, loan.dueAt || "", loan.returnedAt || ""].join(",")),
     ].join("\n");
     try {
@@ -315,7 +330,7 @@ function StoreKeeperDashboard() {
   };
 
   const nav = (name) => <button key={name} type="button" className={section === name ? "is-active" : ""} onClick={() => { setSection(name); setError(""); setMessage(""); }}>
-    <span aria-hidden="true">{({ Dashboard: "▦", Inventory: "▤", "Issue / return": "↔", RFID: "⌁", History: "◷", Notices: "♧", Reports: "▧" })[name]}</span>{name}
+    <span aria-hidden="true">{({ Dashboard: "▦", Inventory: "▤", "Borrow & return": "↔", RFID: "⌁", History: "◷", Notices: "♧", Reports: "▧" })[name]}</span>{name}
   </button>;
   const serialScannerControls = <div className="store-dashboard-serial-controls">
     {serialSupported ? <>
@@ -333,8 +348,6 @@ function StoreKeeperDashboard() {
         <div className="store-dashboard-brand">Uni<span>X</span>Sport</div>
         <p className="store-dashboard-label">STORE WORKSPACE</p>
         <nav aria-label="Store Keeper navigation">{sections.map(nav)}</nav>
-        <div className="store-dashboard-account"><span>SK</span><div><strong>Store Keeper</strong><small>{storekeeper?.email}</small></div></div>
-        <button className="store-dashboard-logout" type="button" onClick={logout}>↪ <span>Log out</span></button>
       </aside>
 
       <section className="store-dashboard-main">
@@ -351,6 +364,7 @@ function StoreKeeperDashboard() {
             <button className="store-dashboard-icon" type="button" aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"} title={darkMode ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDarkMode((value) => !value)}>
               {darkMode ? <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg> : <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z" /></svg>}
             </button>
+            <button className="store-dashboard-header-logout" type="button" aria-label="Log out" onClick={logout}><span aria-hidden="true">↪</span><span className="store-dashboard-header-logout-label">Log out</span></button>
           </div>
         </header>
 
@@ -359,7 +373,7 @@ function StoreKeeperDashboard() {
           {message && <p className="store-dashboard-success" role="status">{message}</p>}
 
           {section === "Dashboard" && <>
-            <div className="store-dashboard-title"><div><p>TODAY, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }).toUpperCase()}</p><h1>Equipment dashboard</h1><span>Monitor inventory, borrowing activity, and returns.</span></div><button type="button" className="store-dashboard-primary" onClick={() => setSection("Issue / return")}>Issue equipment</button></div>
+            <div className="store-dashboard-title"><div><p>TODAY, {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }).toUpperCase()}</p><h1>Equipment dashboard</h1><span>Monitor inventory, borrowing activity, and returns.</span></div><button type="button" className="store-dashboard-primary" onClick={() => setSection("Borrow & return")}>Borrow equipment</button></div>
             <div className="store-dashboard-metrics"><article><span>Available items</span><strong>{equipment.filter((item) => item.status === "available").length}</strong></article><article><span>Currently borrowed</span><strong>{activeLoans.length}</strong></article><article><span>Overdue returns</span><strong>{overdueLoans.length}</strong></article><article><span>Categories</span><strong>{categories.length}</strong></article></div>
             <section className="store-dashboard-panel"><div className="store-dashboard-panel-heading"><div><h2>Recent borrowing</h2><p>Latest equipment issue and return activity.</p></div><button type="button" onClick={() => setSection("History")}>Full history</button></div>
               <LoanTable loans={loans.slice(0, 8)} busy={busy} onReturn={markReturned} />
@@ -370,19 +384,19 @@ function StoreKeeperDashboard() {
             <PageTitle title="Equipment inventory" detail="Manage equipment categories, individual items, and condition." />
             <div className="store-dashboard-forms">
               <form className="store-dashboard-panel store-dashboard-form" onSubmit={addCategory}><h2>Add category</h2><label>Category name<input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required maxLength={80} placeholder="e.g. Rackets" /></label><button className="store-dashboard-primary" disabled={busy}>Add category</button></form>
-              <form className="store-dashboard-panel store-dashboard-form" onSubmit={saveEquipment}><h2>Add equipment</h2><label>Category<select value={equipmentForm.categoryId} onChange={(event) => setEquipmentForm({ ...equipmentForm, categoryId: event.target.value })} required><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Equipment ID<input value={equipmentForm.itemCode} onChange={(event) => setEquipmentForm({ ...equipmentForm, itemCode: event.target.value })} required maxLength={50} /></label><label>Equipment name<input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} required maxLength={120} /></label><button className="store-dashboard-primary" disabled={busy}>Add item</button></form>
+              <form className="store-dashboard-panel store-dashboard-form" onSubmit={saveEquipment}><h2>Add equipment</h2><label>Category<select value={equipmentForm.categoryId} onChange={(event) => setEquipmentForm({ ...equipmentForm, categoryId: event.target.value })} required><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Item name<input value={equipmentForm.name} onChange={(event) => setEquipmentForm({ ...equipmentForm, name: event.target.value })} required maxLength={120} /></label><label>Quantity<input type="number" min="1" max="500" step="1" value={equipmentForm.quantity} onChange={(event) => setEquipmentForm({ ...equipmentForm, quantity: event.target.value })} required /></label><p className="store-dashboard-hint">Each unit gets its own generated equipment ID for issue, return, and RFID tracking.</p><button className="store-dashboard-primary" disabled={busy}>Add to inventory</button></form>
             </div>
-            <section className="store-dashboard-panel"><div className="store-dashboard-panel-heading"><div><h2>Equipment</h2><p>{categories.map((category) => `${category.name} (${category.itemCount})`).join(" · ") || "Add a category to start the inventory."}</p></div><input aria-label="Search equipment" placeholder="Search ID or name" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} /></div>
-              <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>ID</th><th>Equipment</th><th>Category</th><th>RFID</th><th>Status</th><th>Actions</th></tr></thead><tbody>{equipment.filter((item) => `${item.itemCode} ${item.name} ${item.category}`.toLowerCase().includes(equipmentSearch.toLowerCase())).map((item) => <tr key={item.id}><td>{item.itemCode}</td><td>{item.name}</td><td>{item.category}</td><td>{item.rfidTag || "Not assigned"}</td><td><Status status={item.status} /></td><td className="store-dashboard-actions"><button type="button" onClick={() => setEditItem({ id: item.id, itemCode: item.itemCode, name: item.name, categoryId: item.categoryId })}>Edit</button>{item.status !== "borrowed" && item.status !== "removed" && <button type="button" onClick={() => updateStatus(item.id, item.status === "damaged" ? "available" : "damaged")}>{item.status === "damaged" ? "Mark repaired" : "Mark damaged"}</button>}</td></tr>)}</tbody></table></div>
+            <section className="store-dashboard-panel"><div className="store-dashboard-panel-heading"><div><h2>Inventory list</h2><p>{categories.map((category) => `${category.name} (${category.itemCount})`).join(" · ") || "Add a category to start the inventory."}</p></div><input aria-label="Search equipment" placeholder="Search ID or name" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} /></div>
+              <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>ID</th><th>Equipment</th><th>Category</th><th>RFID</th><th>Status</th><th>Actions</th></tr></thead><tbody>{inventoryEquipment.map((item) => <tr key={item.id}><td>{item.itemCode}</td><td>{item.name}</td><td>{item.category}</td><td>{item.rfidTag || "Not assigned"}</td><td><Status status={item.status} /></td><td className="store-dashboard-actions"><button type="button" onClick={() => setEditItem({ id: item.id, itemCode: item.itemCode, name: item.name, categoryId: item.categoryId })}>Edit</button>{item.status !== "borrowed" && item.status !== "removed" && <><button type="button" onClick={() => updateStatus(item.id, item.status === "damaged" ? "available" : "damaged")}>{item.status === "damaged" ? "Mark repaired" : "Mark damaged"}</button><button className="store-dashboard-remove" type="button" onClick={() => removeEquipment(item)}>Remove</button></>}</td></tr>)}{!inventoryEquipment.length && <tr><td className="store-dashboard-empty-cell" colSpan="6">{equipment.length ? "No inventory items match this search." : "No inventory items to show."}</td></tr>}</tbody></table></div>
             </section>
           </>}
 
-          {section === "Issue / return" && <>
-            <PageTitle title="Issue equipment" detail="Find a student, add equipment to the cart, and confirm the issue." />
+          {section === "Borrow & return" && <>
+            <PageTitle title="Borrow & return equipment" detail="Find a student, select a category, and manage the borrow cart." />
             <section className="store-dashboard-panel store-dashboard-scan"><form onSubmit={handleScan}><label>Scan RFID or USB barcode<input autoComplete="off" value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Focus here, scan tag, then press Enter" /></label><button className="store-dashboard-secondary" disabled={busy}>Scan RFID</button></form><small>Keyboard scanners can type into the field. Serial readers should send each tag followed by a line break.</small>{serialScannerControls}{scanResult && <p role="status">{scanResult.type === "student" ? `Student: ${scanResult.student.fullName} · ${scanResult.student.regNo}` : `Equipment: ${scanResult.equipment.name} · ${scanResult.equipment.itemCode} · ${scanResult.equipment.status}`}</p>}</section>
             <div className="store-dashboard-issue-layout"><section className="store-dashboard-panel"><h2>Student</h2><form className="store-dashboard-search-form" onSubmit={searchStudents}><input aria-label="University ID" value={studentQuery} onChange={(event) => { setStudentQuery(event.target.value); setSelectedStudent(null); }} placeholder="University identification number" /><button className="store-dashboard-secondary">Search student</button></form>{studentMatches.map((student) => <button className="store-dashboard-result" key={student.id} type="button" onClick={() => selectStudent(student)}><strong>{student.fullName}</strong><span>{student.regNo} · {student.faculty}</span></button>)}{selectedStudent && <p className="store-dashboard-selected">Selected: <strong>{selectedStudent.fullName}</strong> · {selectedStudent.regNo}</p>}
               <h2 className="store-dashboard-subheading">Available equipment</h2><div className="store-dashboard-filter-row"><select aria-label="Equipment category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><input aria-label="Find equipment" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="Search ID or name" /></div><div className="store-dashboard-available-list">{availableEquipment.map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.itemCode} · {item.category}</small></span><button type="button" disabled={cart.some((cartItem) => cartItem.id === item.id)} onClick={() => setCart((current) => [...current, item])}>{cart.some((cartItem) => cartItem.id === item.id) ? "Added" : "Add"}</button></div>)}{!availableEquipment.length && <p>No available equipment found.</p>}</div>
-            </section><section className="store-dashboard-panel store-dashboard-cart"><h2>Issue cart <span>{cart.length}</span></h2>{cart.map((item) => <div className="store-dashboard-cart-item" key={item.id}><span><strong>{item.name}</strong><small>{item.itemCode}</small></span><button type="button" aria-label={`Remove ${item.name} from cart`} onClick={() => setCart((current) => current.filter((entry) => entry.id !== item.id))}>Remove</button></div>)}{!cart.length && <p className="store-dashboard-empty">Equipment added for this transaction appears here.</p>}<label>Return due date<input type="date" min={today()} value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><button className="store-dashboard-primary store-dashboard-confirm" type="button" disabled={busy || !cart.length || !selectedStudent} onClick={confirmIssue}>Confirm issue</button></section></div>
+            </section><section className="store-dashboard-panel store-dashboard-cart"><h2>Borrow cart <span>{cart.length}</span></h2>{cart.map((item) => <div className="store-dashboard-cart-item" key={item.id}><span><strong>{item.name}</strong><small>{item.itemCode}</small></span><button type="button" aria-label={`Remove ${item.name} from cart`} onClick={() => setCart((current) => current.filter((entry) => entry.id !== item.id))}>Remove</button></div>)}{!cart.length && <p className="store-dashboard-empty">Items selected for this borrow appear here.</p>}<label>Return due date<input type="date" min={today()} value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label><button className="store-dashboard-primary store-dashboard-confirm" type="button" disabled={busy || !cart.length || !selectedStudent} onClick={confirmIssue}>Confirm borrow</button></section></div>
           </>}
 
           {section === "RFID" && <>
@@ -414,7 +428,7 @@ function Status({ status }) {
 }
 
 function LoanTable({ loans, busy, onReturn, report = false }) {
-  return <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>Student</th><th>University ID</th><th>Equipment</th><th>Issued</th><th>Due</th><th>Status</th>{!report && <th>Action</th>}</tr></thead><tbody>{loans.map((loan) => <tr key={loan.id}><td>{loan.studentName}</td><td>{loan.regNo}</td><td>{loan.itemName}</td><td>{formatDate(loan.borrowedAt)}</td><td>{formatDate(loan.dueAt)}</td><td><Status status={loan.returnedAt ? "returned" : loan.dueAt && loan.dueAt.slice(0, 10) < today() ? "overdue" : "borrowed"} /></td>{!report && <td>{loan.returnedAt ? "Complete" : <button type="button" disabled={busy} onClick={() => onReturn(loan.id)}>Mark returned</button>}</td>}</tr>)}{!loans.length && <tr><td className="store-dashboard-empty-cell" colSpan={report ? 6 : 7}>No equipment history to show.</td></tr>}</tbody></table></div>;
+  return <div className="store-dashboard-table-wrap"><table className="store-dashboard-table"><thead><tr><th>Student</th><th>University ID</th><th>Equipment</th><th>Borrowed on</th><th>Due date</th><th>Status</th>{!report && <th>Action</th>}</tr></thead><tbody>{loans.map((loan) => <tr key={loan.id}><td>{loan.studentName}</td><td>{loan.regNo}</td><td>{loan.itemName}</td><td>{formatDate(loan.borrowedAt)}</td><td>{formatDate(loan.dueAt)}</td><td><Status status={loan.returnedAt ? "returned" : loan.dueAt && loan.dueAt.slice(0, 10) < today() ? "overdue" : "borrowed"} /></td>{!report && <td>{loan.returnedAt ? "Complete" : <button type="button" disabled={busy} onClick={() => onReturn(loan.id)}>Mark returned</button>}</td>}</tr>)}{!loans.length && <tr><td className="store-dashboard-empty-cell" colSpan={report ? 6 : 7}>No equipment history to show.</td></tr>}</tbody></table></div>;
 }
 
 export default StoreKeeperDashboard;

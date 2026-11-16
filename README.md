@@ -2,7 +2,7 @@
 
 ## Equipment History
 
-Run the API from this folder with `npm run server`. Students use the Equipment link after signing in. Store Keepers can record a loan by entering the student's registration number and equipment name, then mark the item returned. Student and Store Keeper screens use the same SQLite loan records.
+Run the API from this folder with `npm run server`. In the Store Keeper Inventory tab, add a category, then add equipment by category, item name, and quantity. Each unit receives a unique equipment ID and can be tracked, issued, returned, assigned an RFID tag, or removed from active inventory. Removing an item keeps its loan history. Student and Store Keeper screens use the same SQLite loan records.
 
 Store Keeper accounts are created by an administrator, not through public registration. In PowerShell, set the account values and run the setup script before starting the API:
 

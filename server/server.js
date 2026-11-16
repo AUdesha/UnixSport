@@ -443,25 +443,55 @@ app.post("/api/storekeeper/equipment", (request, response) => {
   if (!storekeeperIdForRequest(request)) {
     return response.status(401).json({ message: "Log in as a Store Keeper to continue." });
   }
-  const { categoryId, itemCode, name } = request.body;
+  const { categoryId, itemCode, name, quantity = 1 } = request.body;
+  const hasItemCode = itemCode !== undefined;
   if (
-    !Number.isInteger(categoryId) || typeof itemCode !== "string" || !itemCode.trim() || itemCode.trim().length > 50 ||
+    !Number.isInteger(categoryId) ||
+    !Number.isInteger(quantity) || quantity < 1 || quantity > 500 ||
+    (hasItemCode && (typeof itemCode !== "string" || !itemCode.trim() || itemCode.trim().length > 50 || quantity !== 1)) ||
     typeof name !== "string" || !name.trim() || name.trim().length > 120
   ) {
-    return response.status(400).json({ message: "Enter a category, equipment ID, and name." });
+    return response.status(400).json({ message: "Enter a category and equipment name, with a quantity from 1 to 500." });
   }
   try {
-    const result = database.prepare(`
+    const insertEquipment = database.prepare(`
       INSERT INTO equipment_items (category_id, item_code, name)
       VALUES (?, ?, ?)
-    `).run(categoryId, itemCode.trim(), name.trim());
-    return response.status(201).json({ equipment: database.prepare(`
+    `);
+    const getEquipment = database.prepare(`
       SELECT equipment_items.id, equipment_items.item_code AS itemCode, equipment_items.name,
              equipment_items.rfid_tag AS rfidTag, equipment_items.status,
              equipment_categories.id AS categoryId, equipment_categories.name AS category
       FROM equipment_items JOIN equipment_categories ON equipment_categories.id = equipment_items.category_id
       WHERE equipment_items.id = ?
-    `).get(result.lastInsertRowid) });
+    `);
+    const items = database.transaction(() => {
+      if (hasItemCode) {
+        const result = insertEquipment.run(categoryId, itemCode.trim(), name.trim());
+        return [getEquipment.get(result.lastInsertRowid)];
+      }
+
+      let nextCode = database.prepare("SELECT COALESCE(MAX(id), 0) + 1 AS nextId FROM equipment_items").get().nextId;
+      const codeExists = database.prepare("SELECT 1 FROM equipment_items WHERE item_code = ?");
+      const createdItems = [];
+      for (let index = 0; index < quantity; index += 1) {
+        let generatedCode;
+        do {
+          generatedCode = `EQ-${String(nextCode).padStart(6, "0")}`;
+          nextCode += 1;
+        } while (codeExists.get(generatedCode));
+
+        const result = insertEquipment.run(categoryId, generatedCode, name.trim());
+        createdItems.push(getEquipment.get(result.lastInsertRowid));
+      }
+      return createdItems;
+    })();
+
+    return response.status(201).json({
+      equipment: hasItemCode ? items[0] : items,
+      items,
+      count: items.length,
+    });
   } catch (error) {
     if (error.code === "SQLITE_CONSTRAINT_UNIQUE") return response.status(409).json({ message: "That equipment ID already exists." });
     if (error.code === "SQLITE_CONSTRAINT_FOREIGNKEY") return response.status(404).json({ message: "Equipment category not found." });
