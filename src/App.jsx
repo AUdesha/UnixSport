@@ -13,6 +13,7 @@ import GymSchedule from "./pages/GymSchedule";
 import RequestSchedule from "./pages/RequestSchedule";
 import EquipmentHistory from "./pages/EquipmentHistory";
 import StoreKeeperDashboard from "./pages/StoreKeeperDashboard";
+import StoreKeeperDemo from "./pages/StoreKeeperDemo";
 import Notifications from "./pages/Notifications";
 import StaffNotices from "./pages/StaffNotices";
 function App() {
@@ -29,6 +30,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/equipment" element={<EquipmentHistory />} />
         <Route path="/storekeeper-dashboard" element={<StoreKeeperDashboard />} />
+        <Route path="/storekeeper-demo" element={<StoreKeeperDemo />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/staff-notices" element={<StaffNotices />} />
         <Route path="/add-event" element={<AddEvent />} />
